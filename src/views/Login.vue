@@ -60,7 +60,7 @@ function onRegistered(username: string) {
     <div class="auth-card">
       <div class="auth-brand">
         <div class="brand-mark">✦</div>
-        <span>lumina</span>
+        <span>ice</span>
       </div>
       <p class="eyebrow">WELCOME BACK</p>
       <h1>登录</h1>

@@ -53,7 +53,7 @@ onMounted(() => scrollToBottom(false))
     <article v-for="message in messages" :key="message.id" class="message" :class="`message--${message.role.toLowerCase()}`">
       <div v-if="message.role === 'ASSISTANT'" class="message__avatar avatar avatar--assistant">✦</div>
       <div class="message__body">
-        <div class="message__meta"><span>{{ message.role === 'ASSISTANT' ? 'Lumina' : '你' }}</span><span v-if="message.role === 'ASSISTANT' && message.modelId">· Lumina 2.1</span></div>
+        <div class="message__meta"><span>{{ message.role === 'ASSISTANT' ? 'ice' : '你' }}</span><span v-if="message.role === 'ASSISTANT' && message.modelId">· ice 2.1</span></div>
         <div class="message__content" :class="{ 'message__content--error': message.status === 'FAILED', 'message__content--interrupted': message.status === 'INTERRUPTED' }">
           <template v-if="message.status === 'STREAMING' && !message.content">
             <span class="thinking"><i></i><i></i><i></i><span>正在思考</span></span>

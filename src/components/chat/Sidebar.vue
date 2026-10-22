@@ -55,7 +55,7 @@ function confirmDelete(session: ChatSession) {
     <div class="sidebar__topline">
       <div class="brand-lockup">
         <div class="brand-mark">✦</div>
-        <span>lumina</span>
+        <span>ice</span>
       </div>
       <button class="icon-button sidebar__close" aria-label="关闭会话导航" @click="emit('closeMobile')">
         <AppIcon name="close" />

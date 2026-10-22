@@ -44,6 +44,6 @@ defineExpose({ fill: (text: string) => { value.value = text; void nextTick(resiz
         </div>
       </div>
     </div>
-    <p class="composer-disclaimer">Lumina 可能会出错，请核对重要信息。</p>
+    <p class="composer-disclaimer">ice 可能会出错，请核对重要信息。</p>
   </div>
 </template>

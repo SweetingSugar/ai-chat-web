@@ -38,9 +38,9 @@ const activeTitle = computed(() => workspace.activeSession.value?.title ?? 'æ–°å
 const hasMessages = computed(() => workspace.messages.value.length > 0)
 const activeModel = ref<ModelSummary>({
   id: 3,
-  providerName: 'Lumina',
+  providerName: 'ice',
   modelCode: 'lumina-2.1',
-  modelName: 'Lumina 2.1',
+  modelName: 'ice 2.1',
   contextWindow: 32768,
   maxOutputTokens: 4096,
   supportStream: true,
