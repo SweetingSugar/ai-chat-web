@@ -20,13 +20,13 @@ const showScrollButton = ref(false)
 function scrollToBottom(smooth = true) {
   if (!listRef.value) return
   listRef.value.scrollTo({ top: listRef.value.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
-  showScrollButton.value = false
+  handleScroll()
 }
 
 function handleScroll() {
   if (!listRef.value) return
   const distance = listRef.value.scrollHeight - listRef.value.scrollTop - listRef.value.clientHeight
-  showScrollButton.value = distance > 180
+  showScrollButton.value = distance > 1
 }
 
 async function copyMessage(message: ChatMessage) {
@@ -48,8 +48,9 @@ onMounted(() => scrollToBottom(false))
 </script>
 
 <template>
-  <div ref="listRef" class="message-list" @scroll="handleScroll">
-    <div v-if="messages.length === 0" class="message-list__empty"></div>
+  <div class="message-list-shell">
+    <div ref="listRef" class="message-list" @scroll="handleScroll">
+      <div v-if="messages.length === 0" class="message-list__empty"></div>
     <article v-for="message in messages" :key="message.id" class="message" :class="`message--${message.role.toLowerCase()}`">
       <div v-if="message.role === 'ASSISTANT'" class="message__avatar avatar avatar--assistant">✦</div>
       <div class="message__body">
@@ -73,7 +74,8 @@ onMounted(() => scrollToBottom(false))
           <button aria-label="踩"><AppIcon name="thumb-down" size="15" /></button>
         </div>
       </div>
-    </article>
+      </article>
+    </div>
     <button v-if="showScrollButton" class="scroll-bottom-button" @click="scrollToBottom()"><AppIcon name="chevron-down" size="16" />回到底部</button>
   </div>
 </template>

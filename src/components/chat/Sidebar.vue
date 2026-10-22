@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
 import type { ChatSession, User } from '../../types/chat'
 
@@ -48,6 +48,13 @@ function confirmDelete(session: ChatSession) {
   openMenuId.value = null
   if (window.confirm(`确定删除“${session.title}”吗？`)) emit('delete', session.id)
 }
+
+function closeMenu() {
+  openMenuId.value = null
+}
+
+onMounted(() => document.addEventListener('click', closeMenu))
+onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 </script>
 
 <template>
