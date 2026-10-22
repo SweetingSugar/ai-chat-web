@@ -28,7 +28,7 @@
 
 .sidebar__section-label { justify-content: space-between; margin: 25px 9px 9px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .sidebar__count { font-size: 11px; font-weight: 500; }
-.conversation-list { display: flex; flex-direction: column; gap: 3px; overflow: auto; padding-right: 1px; }
+.conversation-list { display: flex; flex-direction: column; height: 420px; gap: 3px; overflow: auto; padding-right: 1px; }
 .conversation-item { position: relative; display: flex; align-items: center; min-height: 42px; padding: 0 7px 0 4px; border-radius: 10px; color: var(--text-muted); cursor: pointer; transition: background .16s ease, color .16s ease; }
 .conversation-item:hover, .conversation-item--active { background: var(--surface-hover); color: var(--text); }
 .conversation-item--active { box-shadow: inset 2px 0 var(--accent); }
