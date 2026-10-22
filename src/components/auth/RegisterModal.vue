@@ -87,7 +87,7 @@ function onKeydown(e: KeyboardEvent) {
         <div class="auth-modal" role="dialog" aria-modal="true" aria-label="注册">
           <div class="auth-modal__header">
             <div>
-              <p class="eyebrow">JOIN LUMINA</p>
+              <p class="eyebrow">JOIN ICE</p>
               <h2>创建账号</h2>
             </div>
             <button class="icon-button" aria-label="关闭注册" @click="emit('close')"><AppIcon name="close" /></button>
