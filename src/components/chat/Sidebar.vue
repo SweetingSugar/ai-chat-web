@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
-import type { ChatSession } from '../../types/chat'
+import type { ChatSession, User } from '../../types/chat'
 
 const props = defineProps<{
   sessions: ChatSession[]
   activeSessionId: number | null
+  user: User | null
   mobileOpen?: boolean
 }>()
+
+const displayName = computed(() => props.user?.nickname || props.user?.username || '用户')
+const displayInitial = computed(() => (displayName.value.trim()[0] ?? 'U').toUpperCase())
 
 const emit = defineEmits<{
   newChat: []
@@ -108,8 +112,8 @@ function confirmDelete(session: ChatSession) {
         <p>继续探索，让想法变得更清晰。</p>
       </div>
       <div class="profile-mini">
-        <div class="avatar avatar--small">L</div>
-        <div><strong>Lin Chen</strong><span>个人工作区</span></div>
+        <div class="avatar avatar--small">{{ displayInitial }}</div>
+        <div><strong>{{ displayName }}</strong><span>个人工作区</span></div>
         <AppIcon name="more" size="16" />
       </div>
     </div>

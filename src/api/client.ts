@@ -1,8 +1,7 @@
 import type { ApiResponse, LoginData } from '../types/chat.js'
 
 const AUTH_STORAGE_KEY = 'ai-chat-auth'
-const runtimeImportMeta = import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }
-const API_BASE_URL = (runtimeImportMeta.env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(
