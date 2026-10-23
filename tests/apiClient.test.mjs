@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { apiRequest, apiStream, clearAuthState, setAuthState } from '../.tmp-tests/src/api/client.js'
-import { readChatStream } from '../.tmp-tests/src/api/chat.js'
+import { chatApi, readChatStream } from '../.tmp-tests/src/api/chat.js'
 
 test('uses the token header name returned by the login response', async () => {
   const values = new Map()
@@ -79,4 +79,38 @@ test('parses non-success stream responses as API errors', async () => {
     () => apiStream('/api/chat/sessions/99/stream', { content: '你好' }),
     /会话不存在/,
   )
+})
+
+test('loads user-visible chat models from the chat models endpoint', async () => {
+  const values = new Map()
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }
+  let requestedUrl
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url)
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: [{
+        id: 7,
+        providerName: 'OpenAI',
+        modelCode: 'gpt-test',
+        modelName: '测试模型',
+        contextWindow: 128000,
+        maxOutputTokens: 4096,
+        supportStream: true,
+        defaultModel: false,
+      }],
+    }), { status: 200 })
+  }
+
+  const models = await chatApi.listModels()
+
+  assert.equal(requestedUrl, '/api/chat/models')
+  assert.equal(models[0].id, 7)
+  assert.equal(models[0].modelCode, 'gpt-test')
 })

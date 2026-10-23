@@ -48,7 +48,7 @@ export const chatApi = {
   },
   readStream: readChatStream,
   listModels() {
-    return apiRequest<ModelSummary[]>('/api/ai/models')
+    return apiRequest<ModelSummary[]>('/api/chat/models')
   },
 }
 
