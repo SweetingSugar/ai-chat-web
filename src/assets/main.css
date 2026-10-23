@@ -46,6 +46,10 @@
 .conversation-menu button:hover { background: var(--surface-hover); color: var(--text); }
 .conversation-menu .conversation-menu__danger { color: var(--danger); }
 .conversation-empty { padding: 18px 10px; color: var(--text-soft); font-size: 12px; text-align: center; }
+.conversation-status { padding: 18px 10px; color: var(--text-soft); font-size: 12px; text-align: center; }
+.conversation-status--error { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--danger); }
+.conversation-status button { padding: 3px 7px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-size: 11px; }
+.conversation-list__footer { padding: 8px; color: var(--text-soft); font-size: 11px; text-align: center; }
 .sidebar__footer { margin-top: auto; }
 .usage-card { margin: 20px 5px 12px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
 .usage-card__row { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 11px; }
@@ -76,6 +80,10 @@
 .model-select .app-icon { pointer-events: none; }
 
 .chat-content { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.chat-status { display: flex; min-height: 0; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--text-muted); font-size: 13px; }
+.chat-status--error { color: var(--danger); }
+.chat-status p { margin: 0; }
+.chat-status button { padding: 7px 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font-size: 12px; }
 .empty-state { display: flex; width: min(660px, calc(100% - 32px)); margin: auto; flex-direction: column; align-items: center; padding: 50px 0 120px; text-align: center; }
 .empty-state__orb { position: relative; display: grid; place-items: center; width: 74px; height: 74px; margin-bottom: 22px; border-radius: 25px; background: linear-gradient(145deg, #f0edff, #dedaff); box-shadow: 0 15px 30px rgba(98, 86, 217, .15); transform: rotate(-8deg); }
 .empty-state__orb::before { width: 33px; height: 33px; border: 1px solid rgba(98, 86, 217, .4); border-radius: 50%; content: ''; }
