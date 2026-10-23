@@ -1,17 +1,16 @@
 import { computed, reactive, ref } from 'vue'
 import { chatApi } from '../api/chat.js'
-import type { ChatMessage, ChatSession } from '../types/chat.js'
+import type { ChatMessage, ChatRequest, ChatSession, ChatStreamEvent } from '../types/chat.js'
 
 export type ChatWorkspaceApi = Pick<
   typeof chatApi,
-  'listSessions' | 'createSession' | 'getSession' | 'updateSession' | 'pinSession' | 'deleteSession'
+  'listSessions' | 'createSession' | 'getSession' | 'updateSession' | 'pinSession' | 'deleteSession' | 'stream' | 'regenerate' | 'readStream'
 >
 
 export interface ChatWorkspaceOptions {
   api?: ChatWorkspaceApi
   initialSessions?: ChatSession[]
   initialMessages?: Record<number, ChatMessage[]>
-  respond?: (content: string, signal?: AbortSignal) => Promise<string>
   pageSize?: number
 }
 
@@ -216,62 +215,126 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
   }
 
-  async function generateAssistant(sessionId: number, assistant: ChatMessage, content: string) {
-    const respond = options.respond ?? (async (value: string) => `已收到：${value}`)
+  async function syncSessionDetail(sessionId: number) {
+    const detail = await api.getSession(sessionId)
+    const sessionIndex = sessions.value.findIndex((session) => session.id === sessionId)
+    if (sessionIndex >= 0) sessions.value[sessionIndex] = detail.session
+    messagesBySession[sessionId] = detail.messages.map((message) => ({ ...message }))
+    return detail
+  }
+
+  function handleStreamEvent(assistant: ChatMessage, event: ChatStreamEvent) {
+    assistant.requestId = event.requestId || assistant.requestId
+    if (event.type === 'START') {
+      assistant.generationTaskId = event.taskId
+      assistant.id = event.assistantMessageId ?? assistant.id
+      assistant.modelId = event.modelId
+      assistant.status = 'STREAMING'
+    } else if (event.type === 'DELTA') {
+      assistant.content += event.delta ?? ''
+      assistant.status = 'STREAMING'
+    } else if (event.type === 'COMPLETE') {
+      assistant.status = 'COMPLETED'
+      assistant.usage = event.usage ?? undefined
+    } else if (event.type === 'FAILED') {
+      assistant.status = 'FAILED'
+      assistant.errorCode = event.errorCode
+      assistant.errorMessage = event.message || '生成失败，请稍后重试'
+    }
+    assistant.updateTime = now()
+  }
+
+  async function generateAssistant(sessionId: number, assistant: ChatMessage, content: string, regenerate = false) {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    const requestId = crypto.randomUUID()
+    const controller = new AbortController()
     generatingSessionId.value = sessionId
-    generationController.value = new AbortController()
+    generationController.value = controller
     assistant.status = 'STREAMING'
     assistant.content = ''
+    assistant.requestId = requestId
+    assistant.errorCode = null
     assistant.errorMessage = null
+    assistant.usage = undefined
     try {
-      assistant.content = await respond(content, generationController.value.signal)
-      assistant.status = 'COMPLETED'
+      const request: ChatRequest = {
+        content,
+        modelId: session?.defaultModelId || undefined,
+        requestId,
+      }
+      const response = regenerate
+        ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
+        : await api.stream(sessionId, request, controller.signal)
+      await api.readStream(response, (event) => handleStreamEvent(assistant, event))
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         assistant.status = 'INTERRUPTED'
         assistant.errorMessage = '已停止生成'
       } else {
         assistant.status = 'FAILED'
-        assistant.errorMessage = error instanceof Error ? error.message : '生成失败，请稍后重试'
+        assistant.errorMessage = getErrorMessage(error, '生成失败，请稍后重试')
       }
-    } finally {
       assistant.updateTime = now()
+    } finally {
       generatingSessionId.value = null
       generationController.value = null
+      try {
+        await syncSessionDetail(sessionId)
+      } catch (error) {
+        if (!assistant.errorMessage) assistant.errorMessage = getErrorMessage(error, '同步会话失败，请刷新重试')
+      }
+      assistant.updateTime = now()
     }
   }
 
   async function submit(content: string) {
     const value = content.trim()
-    if (!value || !activeSessionId.value || isGenerating.value) return
+    if (!value || isGenerating.value) return
+    if (activeSessionId.value === null) await createSession()
     const sessionId = activeSessionId.value
+    if (sessionId === null) return
     const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
     const sessionMessages = ensureMessages(sessionId)
     const userMessage = createMessage(nextId++, sessionId, 'USER', value)
     const assistantMessage = createMessage(nextId++, sessionId, 'ASSISTANT', '')
     userMessage.sequence = sessionMessages.length + 1
     assistantMessage.sequence = sessionMessages.length + 2
     sessionMessages.push(userMessage, assistantMessage)
-    if (session) {
-      session.lastMessageTime = now()
-      session.updateTime = now()
+    if (session.title === '新会话') {
+      try {
+        const updated = await api.updateSession(sessionId, { title: value.slice(0, 20) })
+        const index = sessions.value.findIndex((item) => item.id === sessionId)
+        if (index >= 0) sessions.value[index] = updated
+      } catch {
+        session.title = value.slice(0, 20)
+      }
     }
+    session.lastMessageTime = now()
+    session.updateTime = now()
     await generateAssistant(sessionId, assistantMessage, value)
   }
 
   async function retry(messageId: number) {
     const sessionId = activeSessionId.value
-    if (!sessionId || isGenerating.value) return
+    if (sessionId === null || isGenerating.value) return
     const sessionMessages = ensureMessages(sessionId)
     const assistant = sessionMessages.find((message) => message.id === messageId)
     const index = assistant ? sessionMessages.indexOf(assistant) : -1
     const user = index > 0 ? sessionMessages[index - 1] : null
     if (!assistant || assistant.role !== 'ASSISTANT' || !user || user.role !== 'USER') return
-    await generateAssistant(sessionId, assistant, user.content)
+    await generateAssistant(sessionId, assistant, user.content, assistant.generationTaskId !== null)
   }
 
   async function regenerate(messageId: number) {
-    await retry(messageId)
+    const sessionId = activeSessionId.value
+    if (sessionId === null || isGenerating.value) return
+    const assistant = ensureMessages(sessionId).find((message) => message.id === messageId)
+    if (!assistant || assistant.role !== 'ASSISTANT') return
+    const index = ensureMessages(sessionId).indexOf(assistant)
+    const user = index > 0 ? ensureMessages(sessionId)[index - 1] : null
+    if (!user || user.role !== 'USER') return
+    await generateAssistant(sessionId, assistant, user.content, true)
   }
 
   function stopGeneration() {

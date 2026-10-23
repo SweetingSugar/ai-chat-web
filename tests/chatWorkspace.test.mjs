@@ -13,8 +13,14 @@ const session = (id, title) => ({
   updateTime: '2026-10-23T10:00:00',
 })
 
-function createFakeApi({ pages = [], details = {} } = {}) {
+function createFakeApi({ pages = [], details = {}, streamEvents = [], regenerateEvents = [] } = {}) {
   const calls = []
+  const responseEvents = new WeakMap()
+  const response = (events) => {
+    const value = new Response(null, { headers: { 'Content-Type': 'text/event-stream' } })
+    responseEvents.set(value, events)
+    return value
+  }
   return {
     calls,
     listSessions: async (page, size) => {
@@ -40,6 +46,17 @@ function createFakeApi({ pages = [], details = {} } = {}) {
     deleteSession: async (id) => {
       calls.push(['deleteSession', id])
       return null
+    },
+    stream: async (id, payload) => {
+      calls.push(['stream', id, payload])
+      return response(streamEvents)
+    },
+    regenerate: async (id, payload) => {
+      calls.push(['regenerate', id, payload])
+      return response(regenerateEvents)
+    },
+    readStream: async (streamResponse, onEvent) => {
+      for (const event of responseEvents.get(streamResponse) ?? []) onEvent(event)
     },
   }
 }
@@ -146,33 +163,122 @@ test('does not let a stale detail response replace the latest selection', async 
   assert.equal(workspace.activeSessionId.value, 2)
 })
 
-test('submits a message and completes the assistant response', async () => {
-  const workspace = createChatWorkspace({
-    api: createFakeApi(),
-    initialSessions: [session(1, '新会话')],
-    respond: async (content) => `已回答：${content}`,
+test('streams deltas, completes the assistant, and synchronizes server messages', async () => {
+  const serverMessages = [
+    { id: 10, sessionId: 1, role: 'USER', content: '你好', sequence: 1, status: 'COMPLETED' },
+    { id: 11, sessionId: 1, role: 'ASSISTANT', content: '你好', sequence: 2, status: 'COMPLETED', generationTaskId: 50, usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6, source: 'ESTIMATED' } },
+  ]
+  const api = createFakeApi({
+    details: { 1: { session: session(1, '你好'), messages: serverMessages } },
+    streamEvents: [
+      { type: 'START', requestId: 'req-1', taskId: 50, assistantMessageId: 11, modelId: 3 },
+      { type: 'DELTA', requestId: 'req-1', taskId: 50, assistantMessageId: 11, delta: '你' },
+      { type: 'DELTA', requestId: 'req-1', taskId: 50, assistantMessageId: 11, delta: '好' },
+      { type: 'COMPLETE', requestId: 'req-1', taskId: 50, assistantMessageId: 11, usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6, source: 'ESTIMATED' } },
+    ],
   })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
 
   await workspace.submit('你好')
 
-  assert.equal(workspace.messages.value.length, 2)
   assert.equal(workspace.messages.value[0].content, '你好')
-  assert.equal(workspace.messages.value[1].content, '已回答：你好')
+  assert.equal(workspace.messages.value[1].content, '你好')
   assert.equal(workspace.messages.value[1].status, 'COMPLETED')
+  assert.equal(workspace.messages.value[1].generationTaskId, 50)
+  assert.equal(workspace.messages.value[1].usage.totalTokens, 6)
+  assert.equal(workspace.isGenerating.value, false)
+  const streamCall = api.calls.find(([name]) => name === 'stream')
+  assert.equal(streamCall[1], 1)
+  assert.equal(streamCall[2].content, '你好')
+  assert.equal(streamCall[2].modelId, 3)
+  assert.match(streamCall[2].requestId, /^[0-9a-f-]{36}$/)
+})
+
+test('creates a session before sending from the empty workspace', async () => {
+  const api = createFakeApi({
+    streamEvents: [{ type: 'FAILED', requestId: 'req-1', errorCode: 'AI_PROVIDER_ERROR', message: 'provider unavailable' }],
+    details: { 99: { session: session(99, '服务端新会话'), messages: [] } },
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [] })
+
+  await workspace.submit('你好')
+
+  assert.deepEqual(api.calls.slice(0, 2).map(([name]) => name), ['createSession', 'stream'])
+  assert.equal(api.calls.find(([name]) => name === 'stream')[1], 99)
+})
+
+test('syncs the persisted interrupted message after stopping a stream', async () => {
+  const api = createFakeApi({
+    details: { 1: { session: session(1, '会话 1'), messages: [{ id: 21, sessionId: 1, role: 'ASSISTANT', content: '已收到一部分', status: 'INTERRUPTED', errorMessage: 'Chat stream interrupted' }] } },
+  })
+  api.stream = async (_id, _payload, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+  const submitting = workspace.submit('停止我')
+  await new Promise((resolve) => setImmediate(resolve))
+  workspace.stopGeneration()
+  await submitting
+
+  assert.equal(workspace.messages.value[0].status, 'INTERRUPTED')
   assert.equal(workspace.isGenerating.value, false)
 })
 
-test('keeps a failed assistant message and restores the composer after an error', async () => {
-  const workspace = createChatWorkspace({
-    api: createFakeApi(),
-    initialSessions: [session(1, '新会话')],
-    respond: async () => { throw new Error('provider unavailable') },
+test('does not submit a second message while the current session is generating', async () => {
+  const api = createFakeApi({
+    streamEvents: [],
   })
+  let release
+  api.stream = async (id, payload) => {
+    api.calls.push(['stream', id, payload])
+    return new Promise((resolve) => { release = resolve })
+  }
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+  const first = workspace.submit('第一条')
+  await new Promise((resolve) => setImmediate(resolve))
+  await workspace.submit('第二条')
+
+  assert.equal(api.calls.filter(([name]) => name === 'stream').length, 1)
+  release(new Response(null, { headers: { 'Content-Type': 'text/event-stream' } }))
+  await first
+})
+
+test('keeps a failed assistant message and restores the composer after an SSE error', async () => {
+  const api = createFakeApi({
+    streamEvents: [{ type: 'FAILED', requestId: 'req-1', errorCode: 'AI_PROVIDER_ERROR', message: 'provider unavailable' }],
+    details: { 1: { session: session(1, '新会话'), messages: [{ id: 20, sessionId: 1, role: 'ASSISTANT', content: '', status: 'FAILED', errorCode: 'AI_PROVIDER_ERROR', errorMessage: 'provider unavailable' }] } },
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
 
   await workspace.submit('请重试')
 
-  const failedMessage = workspace.messages.value[1]
-  assert.equal(failedMessage.status, 'FAILED')
-  assert.equal(failedMessage.errorMessage, 'provider unavailable')
+  assert.equal(workspace.messages.value[0].status, 'FAILED')
+  assert.equal(workspace.messages.value[0].errorMessage, 'provider unavailable')
+  assert.equal(workspace.isGenerating.value, false)
+})
+
+test('regenerates a persisted assistant message through the regenerate endpoint', async () => {
+  const assistant = { id: 20, sessionId: 1, role: 'ASSISTANT', content: '旧回答', status: 'COMPLETED', generationTaskId: 7 }
+  const api = createFakeApi({
+    details: { 1: { session: session(1, '会话 1'), messages: [
+      { id: 19, sessionId: 1, role: 'USER', content: '问题', status: 'COMPLETED' },
+      assistant,
+    ] } },
+    regenerateEvents: [{ type: 'COMPLETE', requestId: 'retry-1', taskId: 8, assistantMessageId: 20, usage: null }],
+  })
+  const workspace = createChatWorkspace({
+    api,
+    initialSessions: [session(1, '会话 1')],
+    initialMessages: { 1: [
+      { id: 19, sessionId: 1, role: 'USER', content: '问题', status: 'COMPLETED' },
+      assistant,
+    ] },
+  })
+
+  await workspace.regenerate(20)
+
+  const regenerateCall = api.calls.find(([name]) => name === 'regenerate')
+  assert.equal(regenerateCall[1], 1)
+  assert.equal(regenerateCall[2].messageId, 20)
   assert.equal(workspace.isGenerating.value, false)
 })
