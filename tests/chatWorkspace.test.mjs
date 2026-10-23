@@ -13,7 +13,7 @@ const session = (id, title) => ({
   updateTime: '2026-10-23T10:00:00',
 })
 
-function createFakeApi({ pages = [], details = {}, streamEvents = [], regenerateEvents = [] } = {}) {
+function createFakeApi({ pages = [], details = {}, streamEvents = [], regenerateEvents = [], updateSessionError = null } = {}) {
   const calls = []
   const responseEvents = new WeakMap()
   const response = (events) => {
@@ -37,6 +37,7 @@ function createFakeApi({ pages = [], details = {}, streamEvents = [], regenerate
     },
     updateSession: async (id, payload) => {
       calls.push(['updateSession', id, payload])
+      if (updateSessionError) throw updateSessionError
       return { ...session(id, payload.title ?? `会话 ${id}`), ...payload }
     },
     pinSession: async (id, pinned) => {
@@ -281,4 +282,48 @@ test('regenerates a persisted assistant message through the regenerate endpoint'
   assert.equal(regenerateCall[1], 1)
   assert.equal(regenerateCall[2].messageId, 20)
   assert.equal(workspace.isGenerating.value, false)
+})
+
+test('persists the selected model on the active session', async () => {
+  const api = createFakeApi()
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+
+  const updated = await workspace.changeModel(8)
+
+  assert.equal(updated.defaultModelId, 8)
+  assert.equal(workspace.activeSession.value.defaultModelId, 8)
+  assert.equal(workspace.isChangingModel.value, false)
+  assert.deepEqual(api.calls, [['updateSession', 1, { defaultModelId: 8 }]])
+})
+
+test('keeps the previous model when saving the selection fails', async () => {
+  const api = createFakeApi({ updateSessionError: new Error('模型不可用') })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+
+  await assert.rejects(() => workspace.changeModel(8), /模型不可用/)
+
+  assert.equal(workspace.activeSession.value.defaultModelId, 3)
+  assert.equal(workspace.isChangingModel.value, false)
+  assert.deepEqual(api.calls, [['updateSession', 1, { defaultModelId: 8 }]])
+})
+
+test('does not change the model while a response is generating', async () => {
+  const api = createFakeApi()
+  let releaseStream
+  api.stream = async (id, payload) => {
+    api.calls.push(['stream', id, payload])
+    return new Promise((resolve) => { releaseStream = resolve })
+  }
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+
+  const submitting = workspace.submit('生成中')
+  await new Promise((resolve) => setImmediate(resolve))
+  const result = await workspace.changeModel(8)
+
+  assert.equal(result, undefined)
+  assert.equal(workspace.activeSession.value.defaultModelId, 3)
+  assert.equal(api.calls.some(([name]) => name === 'updateSession'), false)
+
+  releaseStream(new Response(null, { headers: { 'Content-Type': 'text/event-stream' } }))
+  await submitting
 })

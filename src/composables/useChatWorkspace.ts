@@ -51,6 +51,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
   const activeSessionId = ref<number | null>(sessions.value[0]?.id ?? null)
   const generatingSessionId = ref<number | null>(null)
   const generationController = ref<AbortController | null>(null)
+  const isChangingModel = ref(false)
   const isLoadingSessions = ref(false)
   const isLoadingMoreSessions = ref(false)
   const isLoadingSessionDetail = ref(false)
@@ -173,6 +174,24 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     } catch (error) {
       sessionsError.value = getErrorMessage(error, '重命名失败，请重试')
       throw error
+    }
+  }
+
+  async function changeModel(modelId: number) {
+    const sessionId = activeSessionId.value
+    if (sessionId === null || isGenerating.value || isChangingModel.value) return
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    if (session.defaultModelId === modelId) return session
+
+    isChangingModel.value = true
+    try {
+      const updated = await api.updateSession(sessionId, { defaultModelId: modelId })
+      const index = sessions.value.findIndex((item) => item.id === sessionId)
+      if (index >= 0) sessions.value[index] = updated
+      return updated
+    } finally {
+      isChangingModel.value = false
     }
   }
 
@@ -347,6 +366,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     activeSession,
     messages,
     isGenerating,
+    isChangingModel,
     isLoadingSessions,
     isLoadingMoreSessions,
     isLoadingSessionDetail,
@@ -361,6 +381,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     createSession,
     selectSession,
     renameSession,
+    changeModel,
     togglePinned,
     deleteSession,
     submit,
