@@ -1,0 +1,37 @@
+<h2>选择聊天回答区布局</h2>
+<p class="subtitle">重点比较消息阅读宽度、用户消息位置，以及流式生成时的视觉反馈</p>
+
+<div class="cards">
+  <div class="card" data-choice="centered" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f7f8fa;padding:16px;min-height:220px;color:#1f2937;font:13px/1.5 system-ui">
+        <div style="max-width:520px;margin:auto">
+          <div style="display:flex;gap:8px;margin:12px 0"><div style="width:28px;height:28px;border-radius:50%;background:#dbeafe"></div><div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;flex:1">你好！我可以帮你分析问题，并实时输出答案。<span style="color:#2563eb">▌</span></div></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:42px"><div style="background:#2563eb;color:white;border-radius:12px;padding:10px 12px;max-width:70%">帮我介绍一下这个项目</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 居中阅读区</h3><p>回答内容集中在舒适的阅读宽度；用户消息右对齐。适合长文本和 Markdown。</p></div>
+  </div>
+  <div class="card" data-choice="wide" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f7f8fa;padding:16px;min-height:220px;color:#1f2937;font:13px/1.5 system-ui">
+        <div style="display:flex;gap:8px;margin:12px 0"><div style="width:28px;height:28px;border-radius:50%;background:#dbeafe"></div><div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;flex:1">流式回答会随着服务端事件到达逐步增长，底部显示“生成中”和停止按钮。</div></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:28px"><div style="background:#2563eb;color:white;border-radius:12px;padding:10px 12px">帮我介绍一下这个项目</div></div>
+        <div style="border:1px solid #d1d5db;border-radius:12px;padding:10px;margin-top:20px;color:#6b7280">输入消息… <span style="float:right;background:#2563eb;color:white;padding:2px 8px;border-radius:8px">↑</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · 宽屏工作区</h3><p>消息占用更宽区域，适合代码、表格和调试型问答；上下文更紧凑。</p></div>
+  </div>
+  <div class="card" data-choice="minimal" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827;padding:16px;min-height:220px;color:#e5e7eb;font:13px/1.5 system-ui">
+        <div style="font-weight:700;color:white;margin-bottom:28px">AI Chat</div>
+        <div style="max-width:450px;margin:auto;text-align:center;padding-top:15px"><div style="font-size:20px;color:white;margin-bottom:15px">有什么可以帮你？</div><div style="background:#1f2937;border:1px solid #374151;border-radius:12px;padding:12px;text-align:left;color:#9ca3af">输入消息开始对话… <span style="float:right;color:#60a5fa">↑</span></div></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>C · 极简沉浸式</h3><p>减少气泡和装饰，突出对话本身；视觉更轻，但历史消息层次较弱。</p></div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px">点击一个选项记录偏好，也可以直接在终端说明你的想法。</p>
