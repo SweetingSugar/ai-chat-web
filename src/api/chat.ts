@@ -46,6 +46,7 @@ export const chatApi = {
   regenerate(id: number, payload: ChatRegenerateRequest, signal?: AbortSignal) {
     return apiStream(`/api/chat/sessions/${id}/regenerate`, payload, signal)
   },
+  readStream: readChatStream,
   listModels() {
     return apiRequest<ModelSummary[]>('/api/ai/models')
   },
@@ -61,7 +62,16 @@ export async function readChatStream(response: Response, onEvent: (event: ChatSt
   const deliver = (events: ReturnType<SseParser['push']>) => {
     for (const event of events) {
       if (!event.data) continue
-      onEvent(JSON.parse(event.data) as ChatStreamEvent)
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(event.data)
+      } catch {
+        throw new Error('无法解析流式事件')
+      }
+      if (!parsed || typeof parsed !== 'object' || typeof (parsed as { type?: unknown }).type !== 'string') {
+        throw new Error('无法解析流式事件')
+      }
+      onEvent(parsed as ChatStreamEvent)
     }
   }
 

@@ -38,16 +38,16 @@ let toastTimer: number | undefined
 const activeTitle = computed(() => workspace.activeSession.value?.title ?? '新对话')
 const hasMessages = computed(() => workspace.messages.value.length > 0)
 const sidebarError = computed(() => sessions.value.length === 0 ? sessionsError.value : null)
-const activeModel = ref<ModelSummary>({
-  id: 3,
-  providerName: 'ice',
-  modelCode: 'lumina-2.1',
-  modelName: 'ice 2.1',
-  contextWindow: 32768,
-  maxOutputTokens: 4096,
+const activeModel = computed<ModelSummary>(() => ({
+  id: workspace.activeSession.value?.defaultModelId ?? 3,
+  providerName: '配置模型',
+  modelCode: `model-${workspace.activeSession.value?.defaultModelId ?? 3}`,
+  modelName: `模型 ${workspace.activeSession.value?.defaultModelId ?? 3}`,
+  contextWindow: null,
+  maxOutputTokens: null,
   supportStream: true,
   defaultModel: true,
-})
+}))
 
 function notify(message: string) {
   toast.value = message
@@ -80,6 +80,10 @@ function retrySessionDetail() {
 
 function chooseSuggestion(value: string) {
   composerRef.value?.fill(value)
+}
+
+function submitMessage(content: string) {
+  void workspace.submit(content).catch((error) => notify(error instanceof Error ? error.message : '发送失败，请重试'))
 }
 
 function copyMessage() {
@@ -138,7 +142,7 @@ onMounted(async () => {
         :model="activeModel"
         @menu="sidebarOpen = true"
         @settings="settingsOpen = true"
-        @model-change="notify('模型选择将在连接后端模型列表后生效')"
+        @model-change="notify('模型由当前会话配置决定')"
       />
       <div class="chat-content">
         <div v-if="isLoadingSessionDetail" class="chat-status">正在加载会话…</div>
@@ -149,7 +153,7 @@ onMounted(async () => {
         <EmptyState v-else-if="!hasMessages" :suggestions="['帮我制定一个学习计划', '把这段文字改得更清晰', '解释一个我不懂的概念', '帮我写一个周末旅行计划']" @choose="chooseSuggestion" />
         <MessageList v-else :messages="messages" :generating="isGenerating" @copy="copyMessage" @retry="workspace.retry" @regenerate="workspace.regenerate" />
       </div>
-      <Composer ref="composerRef" :generating="isGenerating" @submit="workspace.submit" @stop="workspace.stopGeneration" />
+      <Composer ref="composerRef" :generating="isGenerating" @submit="submitMessage" @stop="workspace.stopGeneration" />
     </main>
     <SettingsDrawer :open="settingsOpen" :theme="theme" :user="user" @close="settingsOpen = false" @theme="handleTheme" @logout="handleLogout" />
     <Transition name="toast"><div v-if="toast" class="toast"><span class="toast__dot"></span>{{ toast }}</div></Transition>
