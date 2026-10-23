@@ -9,6 +9,7 @@ import SettingsDrawer from '../components/chat/SettingsDrawer.vue'
 import Sidebar from '../components/chat/Sidebar.vue'
 import { useAuth } from '../composables/useAuth'
 import { createChatWorkspace } from '../composables/useChatWorkspace'
+import { chatApi } from '../api/chat'
 import type { ModelSummary } from '../types/chat'
 
 const router = useRouter()
@@ -21,6 +22,7 @@ const sessions = workspace.sessions
 const activeSessionId = workspace.activeSessionId
 const messages = workspace.messages
 const isGenerating = workspace.isGenerating
+const isChangingModel = workspace.isChangingModel
 const isLoadingSessions = workspace.isLoadingSessions
 const isLoadingMoreSessions = workspace.isLoadingMoreSessions
 const isLoadingSessionDetail = workspace.isLoadingSessionDetail
@@ -31,6 +33,9 @@ const hasMoreSessions = workspace.hasMoreSessions
 const sidebarOpen = ref(false)
 const settingsOpen = ref(false)
 const toast = ref('')
+const models = ref<ModelSummary[]>([])
+const isLoadingModels = ref(false)
+const modelsError = ref<string | null>(null)
 const theme = ref<'light' | 'dark'>('light')
 const composerRef = ref<InstanceType<typeof Composer> | null>(null)
 let toastTimer: number | undefined
@@ -38,21 +43,50 @@ let toastTimer: number | undefined
 const activeTitle = computed(() => workspace.activeSession.value?.title ?? '新对话')
 const hasMessages = computed(() => workspace.messages.value.length > 0)
 const sidebarError = computed(() => sessions.value.length === 0 ? sessionsError.value : null)
-const activeModel = computed<ModelSummary>(() => ({
-  id: workspace.activeSession.value?.defaultModelId ?? 3,
+const currentModelId = computed(() => workspace.activeSession.value?.defaultModelId ?? 3)
+const activeModel = computed<ModelSummary>(() => models.value.find((model) => model.id === currentModelId.value) ?? {
+  id: currentModelId.value,
   providerName: '配置模型',
-  modelCode: `model-${workspace.activeSession.value?.defaultModelId ?? 3}`,
-  modelName: `模型 ${workspace.activeSession.value?.defaultModelId ?? 3}`,
+  modelCode: `model-${currentModelId.value}`,
+  modelName: `模型 ${currentModelId.value}`,
   contextWindow: null,
   maxOutputTokens: null,
   supportStream: true,
-  defaultModel: true,
-}))
+  defaultModel: false,
+})
+const selectableModels = computed(() => models.value.some((model) => model.id === activeModel.value.id)
+  ? models.value
+  : [activeModel.value, ...models.value])
 
 function notify(message: string) {
   toast.value = message
   window.clearTimeout(toastTimer)
   toastTimer = window.setTimeout(() => { toast.value = '' }, 2400)
+}
+
+async function loadModels() {
+  isLoadingModels.value = true
+  modelsError.value = null
+  try {
+    const loaded = await chatApi.listModels()
+    models.value = [...new Map(loaded.map((model) => [model.id, model])).values()]
+  } catch (error) {
+    models.value = []
+    modelsError.value = error instanceof Error ? error.message : '模型列表加载失败'
+    notify(modelsError.value)
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+async function changeModel(modelId: number) {
+  if (!selectableModels.value.some((model) => model.id === modelId)) return
+  try {
+    await workspace.changeModel(modelId)
+    notify('模型已切换')
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '模型切换失败，请重试')
+  }
 }
 
 function selectSession(id: number) {
@@ -110,7 +144,7 @@ watch(() => auth.isAuthenticated.value, (value) => {
 
 onMounted(async () => {
   theme.value = (localStorage.getItem('lumina-theme') as 'light' | null) ?? 'light'
-  await workspace.loadSessions()
+  await Promise.all([loadModels(), workspace.loadSessions()])
   await nextTick()
 })
 </script>
@@ -140,9 +174,11 @@ onMounted(async () => {
       <ChatHeader
         :title="activeTitle"
         :model="activeModel"
+        :models="selectableModels"
+        :model-disabled="isLoadingModels || isChangingModel || isGenerating"
         @menu="sidebarOpen = true"
         @settings="settingsOpen = true"
-        @model-change="notify('模型由当前会话配置决定')"
+        @model-change="changeModel"
       />
       <div class="chat-content">
         <div v-if="isLoadingSessionDetail" class="chat-status">正在加载会话…</div>

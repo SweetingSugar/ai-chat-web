@@ -5,6 +5,8 @@ import type { ModelSummary } from '../../types/chat'
 defineProps<{
   title: string
   model: ModelSummary
+  models: ModelSummary[]
+  modelDisabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -24,8 +26,9 @@ const emit = defineEmits<{
     <div class="chat-header__actions">
       <label class="model-select">
         <span class="model-select__dot"></span>
-        <select :value="model.id" aria-label="选择模型" @change="emit('modelChange', Number(($event.target as HTMLSelectElement).value))">
-          <option :value="model.id">{{ model.modelName }}</option>
+        <select :value="model.id" :disabled="modelDisabled" aria-label="选择模型" @change="emit('modelChange', Number(($event.target as HTMLSelectElement).value))">
+          <option v-if="!models.some((item) => item.id === model.id)" :value="model.id">{{ model.modelName }}</option>
+          <option v-for="item in models" :key="item.id" :value="item.id">{{ item.modelName }}</option>
         </select>
         <AppIcon name="chevron-down" size="15" />
       </label>
