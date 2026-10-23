@@ -47,6 +47,13 @@ export interface ChatSession {
   updateTime: string
 }
 
+export interface ChatUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  source: string
+}
+
 export interface ChatMessage {
   id: number
   sessionId: number
@@ -59,6 +66,7 @@ export interface ChatMessage {
   modelId: number | null
   errorCode: string | null
   errorMessage: string | null
+  usage?: ChatUsage
   createTime: string
   updateTime: string
 }
@@ -87,12 +95,7 @@ export interface ChatStreamEvent {
   assistantMessageId: number | null
   modelId: number | null
   modelCode: string | null
-  usage: {
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    source: string
-  } | null
+  usage: ChatUsage | null
   errorCode: string | null
   message: string | null
 }
