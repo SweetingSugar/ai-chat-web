@@ -8,7 +8,6 @@ import MessageList from '../components/chat/MessageList.vue'
 import SettingsDrawer from '../components/chat/SettingsDrawer.vue'
 import Sidebar from '../components/chat/Sidebar.vue'
 import { useAuth } from '../composables/useAuth'
-import { demoMessages, demoRespond, demoSessions } from '../data/demoChat'
 import { createChatWorkspace } from '../composables/useChatWorkspace'
 import type { ModelSummary } from '../types/chat'
 
@@ -16,16 +15,18 @@ const router = useRouter()
 const auth = useAuth()
 const user = auth.user
 
-const workspace = createChatWorkspace({
-  initialSessions: demoSessions,
-  initialMessages: demoMessages,
-  respond: demoRespond,
-})
+const workspace = createChatWorkspace()
 
 const sessions = workspace.sessions
 const activeSessionId = workspace.activeSessionId
 const messages = workspace.messages
 const isGenerating = workspace.isGenerating
+const isLoadingSessions = workspace.isLoadingSessions
+const isLoadingMoreSessions = workspace.isLoadingMoreSessions
+const isLoadingSessionDetail = workspace.isLoadingSessionDetail
+const sessionsError = workspace.sessionsError
+const sessionDetailError = workspace.sessionDetailError
+const hasMoreSessions = workspace.hasMoreSessions
 
 const sidebarOpen = ref(false)
 const settingsOpen = ref(false)
@@ -36,6 +37,7 @@ let toastTimer: number | undefined
 
 const activeTitle = computed(() => workspace.activeSession.value?.title ?? '新对话')
 const hasMessages = computed(() => workspace.messages.value.length > 0)
+const sidebarError = computed(() => sessions.value.length === 0 ? sessionsError.value : null)
 const activeModel = ref<ModelSummary>({
   id: 3,
   providerName: 'ice',
@@ -54,12 +56,26 @@ function notify(message: string) {
 }
 
 function selectSession(id: number) {
-  workspace.selectSession(id)
+  void workspace.selectSession(id).catch((error) => notify(error instanceof Error ? error.message : '加载会话失败'))
 }
 
 function newChat() {
-  workspace.createSession()
+  void workspace.createSession().catch((error) => notify(error instanceof Error ? error.message : '创建会话失败'))
   sidebarOpen.value = false
+}
+
+function loadMoreSessions() {
+  void workspace.loadMoreSessions().catch((error) => notify(error instanceof Error ? error.message : '加载更多会话失败'))
+}
+
+function retryLoadSessions() {
+  void workspace.loadSessions()
+}
+
+function retrySessionDetail() {
+  if (activeSessionId.value !== null) {
+    void workspace.loadSessionDetail(activeSessionId.value).catch((error) => notify(error instanceof Error ? error.message : '加载会话失败'))
+  }
 }
 
 function chooseSuggestion(value: string) {
@@ -90,6 +106,7 @@ watch(() => auth.isAuthenticated.value, (value) => {
 
 onMounted(async () => {
   theme.value = (localStorage.getItem('lumina-theme') as 'light' | null) ?? 'light'
+  await workspace.loadSessions()
   await nextTick()
 })
 </script>
@@ -102,11 +119,17 @@ onMounted(async () => {
       :active-session-id="activeSessionId"
       :user="user"
       :mobile-open="sidebarOpen"
+      :loading="isLoadingSessions"
+      :loading-more="isLoadingMoreSessions"
+      :has-more="hasMoreSessions"
+      :error="sidebarError"
       @new-chat="newChat"
       @select="selectSession"
-      @rename="workspace.renameSession"
-      @pin="workspace.togglePinned"
-      @delete="workspace.deleteSession"
+      @rename="(id, title) => void workspace.renameSession(id, title).catch((error) => notify(error instanceof Error ? error.message : '重命名失败'))"
+      @pin="(id) => void workspace.togglePinned(id).catch((error) => notify(error instanceof Error ? error.message : '置顶操作失败'))"
+      @delete="(id) => void workspace.deleteSession(id).catch((error) => notify(error instanceof Error ? error.message : '删除会话失败'))"
+      @load-more="loadMoreSessions"
+      @retry-load="retryLoadSessions"
       @close-mobile="sidebarOpen = false"
     />
     <main class="chat-main">
@@ -118,7 +141,12 @@ onMounted(async () => {
         @model-change="notify('模型选择将在连接后端模型列表后生效')"
       />
       <div class="chat-content">
-        <EmptyState v-if="!hasMessages" :suggestions="['帮我制定一个学习计划', '把这段文字改得更清晰', '解释一个我不懂的概念', '帮我写一个周末旅行计划']" @choose="chooseSuggestion" />
+        <div v-if="isLoadingSessionDetail" class="chat-status">正在加载会话…</div>
+        <div v-else-if="sessionDetailError" class="chat-status chat-status--error">
+          <p>{{ sessionDetailError }}</p>
+          <button type="button" @click="retrySessionDetail">重新加载</button>
+        </div>
+        <EmptyState v-else-if="!hasMessages" :suggestions="['帮我制定一个学习计划', '把这段文字改得更清晰', '解释一个我不懂的概念', '帮我写一个周末旅行计划']" @choose="chooseSuggestion" />
         <MessageList v-else :messages="messages" :generating="isGenerating" @copy="copyMessage" @retry="workspace.retry" @regenerate="workspace.regenerate" />
       </div>
       <Composer ref="composerRef" :generating="isGenerating" @submit="workspace.submit" @stop="workspace.stopGeneration" />

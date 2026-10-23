@@ -3,12 +3,22 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
 import type { ChatSession, User } from '../../types/chat'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   sessions: ChatSession[]
   activeSessionId: number | null
   user: User | null
   mobileOpen?: boolean
-}>()
+  loading?: boolean
+  loadingMore?: boolean
+  hasMore?: boolean
+  error?: string | null
+}>(), {
+  mobileOpen: false,
+  loading: false,
+  loadingMore: false,
+  hasMore: false,
+  error: null,
+})
 
 const displayName = computed(() => props.user?.nickname || props.user?.username || '用户')
 const displayInitial = computed(() => (displayName.value.trim()[0] ?? 'U').toUpperCase())
@@ -19,10 +29,13 @@ const emit = defineEmits<{
   rename: [id: number, title: string]
   pin: [id: number]
   delete: [id: number]
+  loadMore: []
+  retryLoad: []
   closeMobile: []
 }>()
 
 const query = ref('')
+const listRef = ref<HTMLElement | null>(null)
 const editingId = ref<number | null>(null)
 const editingTitle = ref('')
 const openMenuId = ref<number | null>(null)
@@ -49,6 +62,13 @@ function confirmDelete(session: ChatSession) {
   if (window.confirm(`确定删除“${session.title}”吗？`)) emit('delete', session.id)
 }
 
+function handleListScroll(event: Event) {
+  const element = event.currentTarget as HTMLElement
+  if (!props.loadingMore && props.hasMore && element.scrollHeight - element.scrollTop - element.clientHeight <= 48) {
+    emit('loadMore')
+  }
+}
+
 function closeMenu() {
   openMenuId.value = null
 }
@@ -69,7 +89,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
       </button>
     </div>
 
-    <button class="new-chat-button" @click="emit('newChat')">
+    <button class="new-chat-button" :disabled="loading" @click="emit('newChat')">
       <span class="new-chat-button__icon"><AppIcon name="plus" size="16" /></span>
       <span>新建对话</span>
       <span class="new-chat-button__shortcut">⌘ K</span>
@@ -83,33 +103,43 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 
     <div class="sidebar__section-label"><span>你的对话</span><span class="sidebar__count">{{ sessions.length }}</span></div>
 
-    <div class="conversation-list" role="list">
-      <div v-if="filteredSessions.length === 0" class="conversation-empty">没有找到匹配的会话</div>
-      <div
-        v-for="session in filteredSessions"
-        :key="session.id"
-        class="conversation-item"
-        :class="{ 'conversation-item--active': activeSessionId === session.id }"
-        role="listitem"
-        @click="emit('select', session.id); emit('closeMobile')"
-      >
-        <div class="conversation-item__main">
-          <AppIcon name="chevron-right" size="14" class="conversation-item__chevron" />
-          <form v-if="editingId === session.id" @submit.prevent="saveRename">
-            <input v-model="editingTitle" class="rename-input" autofocus @keyup.esc="editingId = null" @blur="saveRename" />
-          </form>
-          <span v-else class="conversation-item__title">{{ session.title }}</span>
-          <span v-if="session.pinned" class="pin-indicator"><AppIcon name="star" size="12" /></span>
-        </div>
-        <button class="conversation-item__more" aria-label="会话操作" @click.stop="openMenuId = openMenuId === session.id ? null : session.id">
-          <AppIcon name="more" size="16" />
-        </button>
-        <div v-if="openMenuId === session.id" class="conversation-menu" @click.stop>
-          <button @click="startRename(session)"><AppIcon name="edit" size="15" />重命名</button>
-          <button @click="emit('pin', session.id); openMenuId = null"><AppIcon name="star" size="15" />{{ session.pinned ? '取消置顶' : '置顶会话' }}</button>
-          <button class="conversation-menu__danger" @click="confirmDelete(session)"><AppIcon name="trash" size="15" />删除会话</button>
-        </div>
+    <div ref="listRef" class="conversation-list" role="list" @scroll="handleListScroll">
+      <div v-if="loading" class="conversation-status">正在加载会话…</div>
+      <div v-else-if="error" class="conversation-status conversation-status--error">
+        <span>{{ error }}</span>
+        <button type="button" @click="emit('retryLoad')">重试</button>
       </div>
+      <template v-else>
+        <div v-if="filteredSessions.length === 0" class="conversation-empty">
+          {{ query.trim() ? '没有找到匹配的会话' : '还没有会话，开始新对话吧' }}
+        </div>
+        <div
+          v-for="session in filteredSessions"
+          :key="session.id"
+          class="conversation-item"
+          :class="{ 'conversation-item--active': activeSessionId === session.id }"
+          role="listitem"
+          @click="emit('select', session.id); emit('closeMobile')"
+        >
+          <div class="conversation-item__main">
+            <AppIcon name="chevron-right" size="14" class="conversation-item__chevron" />
+            <form v-if="editingId === session.id" @submit.prevent="saveRename">
+              <input v-model="editingTitle" class="rename-input" autofocus @keyup.esc="editingId = null" @blur="saveRename" />
+            </form>
+            <span v-else class="conversation-item__title">{{ session.title }}</span>
+            <span v-if="session.pinned" class="pin-indicator"><AppIcon name="star" size="12" /></span>
+          </div>
+          <button class="conversation-item__more" aria-label="会话操作" @click.stop="openMenuId = openMenuId === session.id ? null : session.id">
+            <AppIcon name="more" size="16" />
+          </button>
+          <div v-if="openMenuId === session.id" class="conversation-menu" @click.stop>
+            <button @click="startRename(session)"><AppIcon name="edit" size="15" />重命名</button>
+            <button @click="emit('pin', session.id); openMenuId = null"><AppIcon name="star" size="15" />{{ session.pinned ? '取消置顶' : '置顶会话' }}</button>
+            <button class="conversation-menu__danger" @click="confirmDelete(session)"><AppIcon name="trash" size="15" />删除会话</button>
+          </div>
+        </div>
+        <div v-if="loadingMore" class="conversation-list__footer">正在加载更多…</div>
+      </template>
     </div>
 
     <div class="sidebar__footer">
