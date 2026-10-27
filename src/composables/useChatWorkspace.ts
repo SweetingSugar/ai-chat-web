@@ -141,10 +141,10 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
   }
 
-  async function createSession() {
+  async function createSession(defaultModelId?: number) {
     sessionsError.value = null
     try {
-      const session = await api.createSession()
+      const session = await api.createSession(undefined, defaultModelId)
       sessions.value.unshift(session)
       messagesBySession[session.id] = []
       activeSessionId.value = session.id
@@ -306,10 +306,10 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
   }
 
-  async function submit(content: string) {
+  async function submit(content: string, defaultModelId?: number) {
     const value = content.trim()
     if (!value || isGenerating.value) return
-    if (activeSessionId.value === null) await createSession()
+    if (activeSessionId.value === null) await createSession(defaultModelId)
     const sessionId = activeSessionId.value
     if (sessionId === null) return
     const session = sessions.value.find((item) => item.id === sessionId)

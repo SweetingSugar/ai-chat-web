@@ -43,7 +43,10 @@ let toastTimer: number | undefined
 const activeTitle = computed(() => workspace.activeSession.value?.title ?? '新对话')
 const hasMessages = computed(() => workspace.messages.value.length > 0)
 const sidebarError = computed(() => sessions.value.length === 0 ? sessionsError.value : null)
-const currentModelId = computed(() => workspace.activeSession.value?.defaultModelId ?? 3)
+const currentModelId = computed(() => workspace.activeSession.value?.defaultModelId
+  ?? models.value.find((model) => model.defaultModel)?.id
+  ?? models.value[0]?.id
+  ?? 3)
 const activeModel = computed<ModelSummary>(() => models.value.find((model) => model.id === currentModelId.value) ?? {
   id: currentModelId.value,
   providerName: '配置模型',
@@ -94,7 +97,7 @@ function selectSession(id: number) {
 }
 
 function newChat() {
-  void workspace.createSession().catch((error) => notify(error instanceof Error ? error.message : '创建会话失败'))
+  void workspace.createSession(currentModelId.value).catch((error) => notify(error instanceof Error ? error.message : '创建会话失败'))
   sidebarOpen.value = false
 }
 
@@ -117,7 +120,7 @@ function chooseSuggestion(value: string) {
 }
 
 function submitMessage(content: string) {
-  void workspace.submit(content).catch((error) => notify(error instanceof Error ? error.message : '发送失败，请重试'))
+  void workspace.submit(content, currentModelId.value).catch((error) => notify(error instanceof Error ? error.message : '发送失败，请重试'))
 }
 
 function copyMessage() {

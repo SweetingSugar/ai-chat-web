@@ -208,6 +208,24 @@ test('creates a session before sending from the empty workspace', async () => {
   assert.equal(api.calls.find(([name]) => name === 'stream')[1], 99)
 })
 
+test('uses the selected model when first sending from an empty workspace', async () => {
+  const api = createFakeApi({
+    streamEvents: [{ type: 'FAILED', requestId: 'req-1', errorCode: 'AI_PROVIDER_ERROR', message: 'provider unavailable' }],
+    details: { 99: { session: { ...session(99, '服务端新会话'), defaultModelId: 8 }, messages: [] } },
+  })
+  api.createSession = async (title, defaultModelId) => {
+    api.calls.push(['createSession', title, defaultModelId])
+    return { ...session(99, '服务端新会话'), defaultModelId }
+  }
+  const workspace = createChatWorkspace({ api, initialSessions: [] })
+
+  await workspace.submit('你好', 8)
+
+  assert.deepEqual(api.calls[0], ['createSession', undefined, 8])
+  assert.equal(workspace.activeSession.value.defaultModelId, 8)
+  assert.equal(api.calls.find(([name]) => name === 'stream')[2].modelId, 8)
+})
+
 test('syncs the persisted interrupted message after stopping a stream', async () => {
   const api = createFakeApi({
     details: { 1: { session: session(1, '会话 1'), messages: [{ id: 21, sessionId: 1, role: 'ASSISTANT', content: '已收到一部分', status: 'INTERRUPTED', errorMessage: 'Chat stream interrupted' }] } },
