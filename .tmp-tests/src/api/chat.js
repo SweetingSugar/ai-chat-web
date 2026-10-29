@@ -38,6 +38,14 @@ export const chatApi = {
     listModels() {
         return apiRequest('/api/chat/models');
     },
+    uploadFile(file) {
+        const body = new FormData();
+        body.append('file', file);
+        return apiRequest('/api/files', {
+            method: 'POST',
+            body,
+        });
+    },
 };
 export async function readChatStream(response, onEvent) {
     const reader = response.body?.getReader();

@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue';
 import { chatApi } from '../api/chat.js';
+import { attachmentPrompt } from '../lib/chatAttachments.js';
 const now = () => new Date().toISOString();
 function createMessage(id, sessionId, role, content) {
     const timestamp = now();
@@ -22,6 +23,9 @@ function createMessage(id, sessionId, role, content) {
 function getErrorMessage(error, fallback) {
     return error instanceof Error && error.message ? error.message : fallback;
 }
+function hasImageAttachment(files) {
+    return files.some((file) => file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/gif');
+}
 export function createChatWorkspace(options = {}) {
     const api = options.api ?? chatApi;
     const pageSize = options.pageSize ?? 20;
@@ -33,6 +37,7 @@ export function createChatWorkspace(options = {}) {
     const activeSessionId = ref(sessions.value[0]?.id ?? null);
     const generatingSessionId = ref(null);
     const generationController = ref(null);
+    const isUploading = ref(false);
     const isChangingModel = ref(false);
     const isLoadingSessions = ref(false);
     const isLoadingMoreSessions = ref(false);
@@ -263,7 +268,7 @@ export function createChatWorkspace(options = {}) {
         }
         assistant.updateTime = now();
     }
-    async function generateAssistant(sessionId, assistant, content, regenerate = false) {
+    async function generateAssistant(sessionId, assistant, content, regenerate = false, fileIds) {
         const session = sessions.value.find((item) => item.id === sessionId);
         const requestId = crypto.randomUUID();
         const controller = new AbortController();
@@ -281,6 +286,8 @@ export function createChatWorkspace(options = {}) {
                 modelId: session?.defaultModelId || undefined,
                 requestId,
             };
+            if (!regenerate && fileIds?.length)
+                request.fileIds = fileIds;
             const response = regenerate
                 ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
                 : await api.stream(sessionId, request, controller.signal);
@@ -310,18 +317,33 @@ export function createChatWorkspace(options = {}) {
             assistant.updateTime = now();
         }
     }
-    async function submit(content, defaultModelId) {
-        const value = content.trim();
-        if (!value || isGenerating.value)
-            return;
+    async function submit(content, defaultModelId, files = [], supportVision = true) {
+        const value = attachmentPrompt(content, files);
+        if (!value || isGenerating.value || isUploading.value)
+            return false;
+        if (hasImageAttachment(files) && !supportVision) {
+            throw new Error('当前模型不支持图片输入，请切换支持图片的模型后重试');
+        }
+        isUploading.value = files.length > 0;
+        let fileIds;
+        try {
+            fileIds = [];
+            for (const file of files) {
+                const uploaded = await api.uploadFile(file);
+                fileIds.push(uploaded.id);
+            }
+        }
+        finally {
+            isUploading.value = false;
+        }
         if (activeSessionId.value === null)
             await createSession(defaultModelId);
         const sessionId = activeSessionId.value;
         if (sessionId === null)
-            return;
+            return false;
         const session = sessions.value.find((item) => item.id === sessionId);
         if (!session)
-            return;
+            return false;
         const sessionMessages = ensureMessages(sessionId);
         const userMessage = createMessage(nextId++, sessionId, 'USER', value);
         const assistantMessage = createMessage(nextId++, sessionId, 'ASSISTANT', '');
@@ -341,7 +363,8 @@ export function createChatWorkspace(options = {}) {
         }
         session.lastMessageTime = now();
         session.updateTime = now();
-        await generateAssistant(sessionId, assistantMessage, value);
+        await generateAssistant(sessionId, assistantMessage, value, false, fileIds);
+        return true;
     }
     async function retry(messageId) {
         const sessionId = activeSessionId.value;
@@ -377,6 +400,7 @@ export function createChatWorkspace(options = {}) {
         activeSession,
         messages,
         isGenerating,
+        isUploading,
         isChangingModel,
         isLoadingSessions,
         isLoadingMoreSessions,

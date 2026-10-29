@@ -290,10 +290,10 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     try {
       const request: ChatRequest = {
         content,
-        fileIds: !regenerate && fileIds?.length ? fileIds : undefined,
         modelId: session?.defaultModelId || undefined,
         requestId,
       }
+      if (!regenerate && fileIds?.length) request.fileIds = fileIds
       const response = regenerate
         ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
         : await api.stream(sessionId, request, controller.signal)

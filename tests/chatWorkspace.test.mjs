@@ -195,6 +195,7 @@ test('streams deltas, completes the assistant, and synchronizes server messages'
   const streamCall = api.calls.find(([name]) => name === 'stream')
   assert.equal(streamCall[1], 1)
   assert.equal(streamCall[2].content, '你好')
+  assert.equal('fileIds' in streamCall[2], false)
   assert.equal(streamCall[2].modelId, 3)
   assert.match(streamCall[2].requestId, /^[0-9a-f-]{36}$/)
 })

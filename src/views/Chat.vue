@@ -22,6 +22,7 @@ const sessions = workspace.sessions
 const activeSessionId = workspace.activeSessionId
 const messages = workspace.messages
 const isGenerating = workspace.isGenerating
+const isUploading = workspace.isUploading
 const isChangingModel = workspace.isChangingModel
 const isLoadingSessions = workspace.isLoadingSessions
 const isLoadingMoreSessions = workspace.isLoadingMoreSessions
@@ -120,8 +121,22 @@ function chooseSuggestion(value: string) {
   composerRef.value?.fill(value)
 }
 
-function submitMessage(content: string) {
-  void workspace.submit(content, currentModelId.value).catch((error) => notify(error instanceof Error ? error.message : '发送失败，请重试'))
+async function submitMessage(payload: { content: string; files: File[] }) {
+  try {
+    const sent = await workspace.submit(
+      payload.content,
+      currentModelId.value,
+      payload.files,
+      activeModel.value.supportVision,
+    )
+    if (sent) composerRef.value?.clear()
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '发送失败，请重试')
+  }
+}
+
+function notifyInvalidFiles(messages: string[]) {
+  notify(messages[0] ?? '部分附件不可用')
 }
 
 function copyMessage() {
@@ -193,7 +208,14 @@ onMounted(async () => {
         <EmptyState v-else-if="!hasMessages" :suggestions="['帮我制定一个学习计划', '把这段文字改得更清晰', '解释一个我不懂的概念', '帮我写一个周末旅行计划']" @choose="chooseSuggestion" />
         <MessageList v-else :messages="messages" :generating="isGenerating" @copy="copyMessage" @retry="workspace.retry" @regenerate="workspace.regenerate" />
       </div>
-      <Composer ref="composerRef" :generating="isGenerating" @submit="submitMessage" @stop="workspace.stopGeneration" />
+      <Composer
+        ref="composerRef"
+        :generating="isGenerating"
+        :submitting="isUploading"
+        @submit="submitMessage"
+        @invalid-files="notifyInvalidFiles"
+        @stop="workspace.stopGeneration"
+      />
     </main>
     <SettingsDrawer :open="settingsOpen" :theme="theme" :user="user" @close="settingsOpen = false" @theme="handleTheme" @logout="handleLogout" />
     <Transition name="toast"><div v-if="toast" class="toast"><span class="toast__dot"></span>{{ toast }}</div></Transition>
