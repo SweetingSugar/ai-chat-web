@@ -19,6 +19,9 @@ withDefaults(defineProps<{
     <path v-else-if="name === 'refresh'" d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4" />
     <path v-else-if="name === 'thumb-up'" d="M7 10v10H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h3Zm0 10h9.2a2 2 0 0 0 1.9-1.4l1.8-6A2 2 0 0 0 18 10h-4V6a3 3 0 0 0-3-3l-4 7v10Z" />
     <path v-else-if="name === 'thumb-down'" d="M7 14V4H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3Zm0-10h9.2a2 2 0 0 1 1.9 1.4l1.8 6A2 2 0 0 1 18 14h-4v4a3 3 0 0 1-3 3l-4-7V4Z" />
+    <path v-else-if="name === 'paperclip'" d="m21.4 11.6-8.5 8.5a5 5 0 0 1-7.1-7.1l9.2-9.2a3.5 3.5 0 0 1 5 5L10.7 18a2 2 0 0 1-2.8-2.8l8.5-8.5" />
+    <path v-else-if="name === 'file'" d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h4" />
+    <path v-else-if="name === 'image'" d="M4 5h16v14H4zM7 16l3.5-4 2.5 3 2-2 2 3M8 9h.01" />
     <path v-else-if="name === 'send'" d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" />
     <path v-else-if="name === 'stop'" d="M7 7h10v10H7z" />
     <path v-else-if="name === 'edit'" d="m4 20 4.2-1 9.7-9.7a2.1 2.1 0 0 0-3-3L5.2 16 4 20Zm9.9-12.8 3 3" />
