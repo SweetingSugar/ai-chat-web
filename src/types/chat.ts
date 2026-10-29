@@ -84,7 +84,19 @@ export interface ModelSummary {
   contextWindow: number | null
   maxOutputTokens: number | null
   supportStream: boolean
+  supportVision: boolean
   defaultModel: boolean
+}
+
+export interface UploadedFile {
+  id: number
+  userId: number
+  originalName: string
+  contentType: string
+  fileSize: number
+  status: string
+  createTime: string
+  updateTime: string
 }
 
 export interface ChatStreamEvent {
@@ -102,6 +114,7 @@ export interface ChatStreamEvent {
 
 export interface ChatRequest {
   content: string
+  fileIds?: number[]
   modelId?: number
   requestId?: string
   temperature?: number

@@ -103,6 +103,7 @@ test('loads user-visible chat models from the chat models endpoint', async () =>
         contextWindow: 128000,
         maxOutputTokens: 4096,
         supportStream: true,
+        supportVision: false,
         defaultModel: false,
       }],
     }), { status: 200 })
@@ -113,4 +114,43 @@ test('loads user-visible chat models from the chat models endpoint', async () =>
   assert.equal(requestedUrl, '/api/chat/models')
   assert.equal(models[0].id, 7)
   assert.equal(models[0].modelCode, 'gpt-test')
+})
+
+test('uploads a chat attachment as multipart form data with the dynamic token header', async () => {
+  const values = new Map()
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), '/api/files')
+    assert.equal(options.method, 'POST')
+    assert.equal(options.headers.get('x-session-token'), 'token-value')
+    assert.equal(options.headers.get('Content-Type'), null)
+    assert.ok(options.body instanceof FormData)
+    assert.equal(options.body.get('file').name, 'report.pdf')
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: {
+        id: 1001,
+        userId: 1,
+        originalName: 'report.pdf',
+        contentType: 'application/pdf',
+        fileSize: 12,
+        status: 'ACTIVE',
+        createTime: '2026-10-29T10:00:00',
+        updateTime: '2026-10-29T10:00:00',
+      },
+    }), { status: 200 })
+  }
+
+  setAuthState({ tokenName: 'x-session-token', tokenValue: 'token-value', user: { id: 1 } })
+  const uploaded = await chatApi.uploadFile(new File(['pdf'], 'report.pdf', { type: 'application/pdf' }))
+
+  assert.equal(uploaded.id, 1001)
+  assert.equal(uploaded.originalName, 'report.pdf')
+  clearAuthState()
 })

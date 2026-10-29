@@ -55,6 +55,7 @@ const activeModel = computed<ModelSummary>(() => models.value.find((model) => mo
   contextWindow: null,
   maxOutputTokens: null,
   supportStream: true,
+  supportVision: false,
   defaultModel: false,
 })
 const selectableModels = computed(() => models.value.some((model) => model.id === activeModel.value.id)

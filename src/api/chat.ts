@@ -10,6 +10,7 @@ import type {
   ChatStreamEvent,
   ModelSummary,
   PageResult,
+  UploadedFile,
 } from '../types/chat.js'
 
 export const chatApi = {
@@ -49,6 +50,14 @@ export const chatApi = {
   readStream: readChatStream,
   listModels() {
     return apiRequest<ModelSummary[]>('/api/chat/models')
+  },
+  uploadFile(file: File) {
+    const body = new FormData()
+    body.append('file', file)
+    return apiRequest<UploadedFile>('/api/files', {
+      method: 'POST',
+      body,
+    })
   },
 }
 
