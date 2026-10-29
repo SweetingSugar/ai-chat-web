@@ -1,10 +1,11 @@
 import { computed, reactive, ref } from 'vue'
 import { chatApi } from '../api/chat.js'
-import type { ChatMessage, ChatRequest, ChatSession, ChatStreamEvent } from '../types/chat.js'
+import type { ChatMessage, ChatRequest, ChatSession, ChatStreamEvent, UploadedFile } from '../types/chat.js'
+import { attachmentPrompt, type AttachmentCandidate } from '../lib/chatAttachments.js'
 
 export type ChatWorkspaceApi = Pick<
   typeof chatApi,
-  'listSessions' | 'createSession' | 'getSession' | 'updateSession' | 'pinSession' | 'deleteSession' | 'stream' | 'regenerate' | 'readStream'
+  'listSessions' | 'createSession' | 'getSession' | 'updateSession' | 'pinSession' | 'deleteSession' | 'uploadFile' | 'stream' | 'regenerate' | 'readStream'
 >
 
 export interface ChatWorkspaceOptions {
@@ -39,6 +40,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+function hasImageAttachment(files: AttachmentCandidate[]) {
+  return files.some((file) => file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/gif')
+}
+
 export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
   const api = options.api ?? chatApi
   const pageSize = options.pageSize ?? 20
@@ -51,6 +56,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
   const activeSessionId = ref<number | null>(sessions.value[0]?.id ?? null)
   const generatingSessionId = ref<number | null>(null)
   const generationController = ref<AbortController | null>(null)
+  const isUploading = ref(false)
   const isChangingModel = ref(false)
   const isLoadingSessions = ref(false)
   const isLoadingMoreSessions = ref(false)
@@ -263,7 +269,13 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     assistant.updateTime = now()
   }
 
-  async function generateAssistant(sessionId: number, assistant: ChatMessage, content: string, regenerate = false) {
+  async function generateAssistant(
+    sessionId: number,
+    assistant: ChatMessage,
+    content: string,
+    regenerate = false,
+    fileIds?: number[],
+  ) {
     const session = sessions.value.find((item) => item.id === sessionId)
     const requestId = crypto.randomUUID()
     const controller = new AbortController()
@@ -278,6 +290,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     try {
       const request: ChatRequest = {
         content,
+        fileIds: !regenerate && fileIds?.length ? fileIds : undefined,
         modelId: session?.defaultModelId || undefined,
         requestId,
       }
@@ -306,14 +319,35 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
   }
 
-  async function submit(content: string, defaultModelId?: number) {
-    const value = content.trim()
-    if (!value || isGenerating.value) return
+  async function submit(
+    content: string,
+    defaultModelId?: number,
+    files: AttachmentCandidate[] = [],
+    supportVision = true,
+  ) {
+    const value = attachmentPrompt(content, files)
+    if (!value || isGenerating.value || isUploading.value) return false
+    if (hasImageAttachment(files) && !supportVision) {
+      throw new Error('当前模型不支持图片输入，请切换支持图片的模型后重试')
+    }
+
+    isUploading.value = files.length > 0
+    let fileIds: number[]
+    try {
+      fileIds = []
+      for (const file of files) {
+        const uploaded: UploadedFile = await api.uploadFile(file as File)
+        fileIds.push(uploaded.id)
+      }
+    } finally {
+      isUploading.value = false
+    }
+
     if (activeSessionId.value === null) await createSession(defaultModelId)
     const sessionId = activeSessionId.value
-    if (sessionId === null) return
+    if (sessionId === null) return false
     const session = sessions.value.find((item) => item.id === sessionId)
-    if (!session) return
+    if (!session) return false
     const sessionMessages = ensureMessages(sessionId)
     const userMessage = createMessage(nextId++, sessionId, 'USER', value)
     const assistantMessage = createMessage(nextId++, sessionId, 'ASSISTANT', '')
@@ -331,7 +365,8 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
     session.lastMessageTime = now()
     session.updateTime = now()
-    await generateAssistant(sessionId, assistantMessage, value)
+    await generateAssistant(sessionId, assistantMessage, value, false, fileIds)
+    return true
   }
 
   async function retry(messageId: number) {
@@ -366,6 +401,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     activeSession,
     messages,
     isGenerating,
+    isUploading,
     isChangingModel,
     isLoadingSessions,
     isLoadingMoreSessions,

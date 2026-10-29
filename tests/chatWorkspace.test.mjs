@@ -48,6 +48,10 @@ function createFakeApi({ pages = [], details = {}, streamEvents = [], regenerate
       calls.push(['deleteSession', id])
       return null
     },
+    uploadFile: async (file) => {
+      calls.push(['uploadFile', file.name])
+      return { id: calls.filter(([name]) => name === 'uploadFile').length, originalName: file.name }
+    },
     stream: async (id, payload) => {
       calls.push(['stream', id, payload])
       return response(streamEvents)
@@ -344,4 +348,53 @@ test('does not change the model while a response is generating', async () => {
 
   releaseStream(new Response(null, { headers: { 'Content-Type': 'text/event-stream' } }))
   await submitting
+})
+
+test('uploads attachments before streaming their IDs with the chat request', async () => {
+  const api = createFakeApi({
+    streamEvents: [{ type: 'COMPLETE', requestId: 'req-1', taskId: 50, assistantMessageId: 11, usage: null }],
+    details: { 1: { session: session(1, '附件问题'), messages: [] } },
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
+
+  const sent = await workspace.submit('总结这两个文件', 3, [
+    { name: 'chart.png', type: 'image/png', size: 10 },
+    { name: 'report.pdf', type: 'application/pdf', size: 20 },
+  ], true)
+
+  assert.equal(sent, true)
+  assert.deepEqual(api.calls.slice(0, 2).map(([name]) => name), ['uploadFile', 'uploadFile'])
+  const streamCall = api.calls.find(([name]) => name === 'stream')
+  assert.equal(streamCall[1], 1)
+  assert.deepEqual(streamCall[2].fileIds, [1, 2])
+  assert.equal(streamCall[2].content, '总结这两个文件')
+})
+
+test('does not create messages or stream when an attachment upload fails', async () => {
+  const api = createFakeApi()
+  api.uploadFile = async () => { throw new Error('文件上传失败') }
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
+
+  await assert.rejects(
+    () => workspace.submit('分析文件', 3, [{ name: 'broken.pdf', type: 'application/pdf', size: 1 }], true),
+    /文件上传失败/,
+  )
+
+  assert.equal(api.calls.some(([name]) => name === 'stream'), false)
+  assert.equal(workspace.messages.value.length, 0)
+  assert.equal(workspace.isUploading.value, false)
+})
+
+test('does not upload image attachments for a model without vision support', async () => {
+  const api = createFakeApi()
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
+
+  await assert.rejects(
+    () => workspace.submit('看图', 3, [{ name: 'chart.png', type: 'image/png', size: 1 }], false),
+    /当前模型不支持图片输入/,
+  )
+
+  assert.equal(api.calls.some(([name]) => name === 'uploadFile'), false)
+  assert.equal(api.calls.some(([name]) => name === 'stream'), false)
+  assert.equal(workspace.messages.value.length, 0)
 })
