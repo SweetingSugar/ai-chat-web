@@ -399,3 +399,37 @@ test('does not upload image attachments for a model without vision support', asy
   assert.equal(api.calls.some(([name]) => name === 'stream'), false)
   assert.equal(workspace.messages.value.length, 0)
 })
+
+test('sends selected knowledge-base IDs and retains stream sources', async () => {
+  const source = {
+    knowledgeBaseId: 4,
+    documentId: 8,
+    chunkId: 12,
+    title: '员工手册',
+    content: '请假规则',
+    score: 0.93,
+    rank: 1,
+  }
+  const api = createFakeApi({
+    streamEvents: [
+      { type: 'START', requestId: 'req-1', taskId: 50, assistantMessageId: 11, modelId: 3, sources: [] },
+      { type: 'COMPLETE', requestId: 'req-1', taskId: 50, assistantMessageId: 11, usage: null, sources: [source] },
+    ],
+    details: {
+      1: {
+        session: session(1, '知识库问题'),
+        messages: [
+          { id: 10, sessionId: 1, role: 'USER', content: '请说明请假规则', status: 'COMPLETED' },
+          { id: 11, sessionId: 1, role: 'ASSISTANT', content: '请假规则', status: 'COMPLETED', sources: [source] },
+        ],
+      },
+    },
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
+
+  await workspace.submit('请说明请假规则', 3, [], true, [4])
+
+  const request = api.calls.find(([name]) => name === 'stream')[2]
+  assert.deepEqual(request.knowledgeBaseIds, [4])
+  assert.deepEqual(workspace.messages.value[1].sources, [source])
+})

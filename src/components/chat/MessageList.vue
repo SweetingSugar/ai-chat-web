@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
+import KnowledgeSources from './KnowledgeSources.vue'
 import type { ChatMessage } from '../../types/chat'
 
 const props = defineProps<{
@@ -66,6 +67,7 @@ onMounted(() => scrollToBottom(false))
           <div v-if="message.status === 'FAILED'" class="message__error"><span>{{ message.errorMessage || '生成失败，请重试。' }}</span><button @click="emit('retry', message.id)">重试</button></div>
           <div v-if="message.status === 'INTERRUPTED'" class="message__interrupted">{{ message.errorMessage }}</div>
         </div>
+        <KnowledgeSources v-if="message.role === 'ASSISTANT' && message.status !== 'STREAMING' && message.sources?.length" :sources="message.sources" />
         <div v-if="message.role === 'ASSISTANT' && message.status !== 'STREAMING' && !generating" class="message__actions">
           <button aria-label="复制回答" @click="copyMessage(message)"><AppIcon name="copy" size="15" /></button>
           <button aria-label="重新生成" @click="emit('regenerate', message.id)"><AppIcon name="refresh" size="15" /></button>

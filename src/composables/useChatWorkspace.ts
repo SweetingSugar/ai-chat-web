@@ -31,6 +31,7 @@ function createMessage(id: number, sessionId: number, role: ChatMessage['role'],
     modelId: role === 'ASSISTANT' ? 3 : null,
     errorCode: null,
     errorMessage: null,
+    sources: [],
     createTime: timestamp,
     updateTime: timestamp,
   }
@@ -261,6 +262,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     } else if (event.type === 'COMPLETE') {
       assistant.status = 'COMPLETED'
       assistant.usage = event.usage ?? undefined
+      assistant.sources = event.sources ?? []
     } else if (event.type === 'FAILED') {
       assistant.status = 'FAILED'
       assistant.errorCode = event.errorCode
@@ -275,6 +277,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     content: string,
     regenerate = false,
     fileIds?: number[],
+    knowledgeBaseIds?: number[],
   ) {
     const session = sessions.value.find((item) => item.id === sessionId)
     const requestId = crypto.randomUUID()
@@ -294,6 +297,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
         requestId,
       }
       if (!regenerate && fileIds?.length) request.fileIds = fileIds
+      if (!regenerate && knowledgeBaseIds?.length) request.knowledgeBaseIds = knowledgeBaseIds
       const response = regenerate
         ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
         : await api.stream(sessionId, request, controller.signal)
@@ -324,6 +328,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     defaultModelId?: number,
     files: AttachmentCandidate[] = [],
     supportVision = true,
+    knowledgeBaseIds: number[] = [],
   ) {
     const value = attachmentPrompt(content, files)
     if (!value || isGenerating.value || isUploading.value) return false
@@ -365,7 +370,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
     session.lastMessageTime = now()
     session.updateTime = now()
-    await generateAssistant(sessionId, assistantMessage, value, false, fileIds)
+    await generateAssistant(sessionId, assistantMessage, value, false, fileIds, knowledgeBaseIds)
     return true
   }
 

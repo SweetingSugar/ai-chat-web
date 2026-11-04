@@ -1,20 +1,34 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
+import KnowledgeBasePicker from './KnowledgeBasePicker.vue'
 import { formatFileSize, selectChatAttachments } from '../../lib/chatAttachments.js'
+import type { KnowledgeBase } from '../../types/chat.js'
 
-const props = withDefaults(defineProps<{ generating: boolean; submitting?: boolean }>(), { submitting: false })
+const props = withDefaults(defineProps<{
+  generating: boolean
+  submitting?: boolean
+  knowledgeBases?: KnowledgeBase[]
+}>(), {
+  submitting: false,
+  knowledgeBases: () => [],
+})
+
 const emit = defineEmits<{
-  submit: [payload: { content: string; files: File[] }]
+  submit: [payload: { content: string; files: File[]; knowledgeBaseIds: number[] }]
   stop: []
   invalidFiles: [messages: string[]]
+  knowledgeLimit: [message: string]
+  openKnowledgePicker: []
 }>()
 
 const value = ref('')
 const files = ref<File[]>([])
+const selectedKnowledgeBaseIds = ref<number[]>([])
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(() => Boolean(value.value.trim() || files.value.length))
+const selectedKnowledgeBases = computed(() => props.knowledgeBases.filter((base) => selectedKnowledgeBaseIds.value.includes(base.id)))
 
 function resize() {
   const input = inputRef.value
@@ -39,9 +53,17 @@ function removeFile(index: number) {
   files.value.splice(index, 1)
 }
 
+function removeKnowledgeBase(id: number) {
+  selectedKnowledgeBaseIds.value = selectedKnowledgeBaseIds.value.filter((item) => item !== id)
+}
+
 function submit() {
   if (!canSubmit.value || props.submitting) return
-  emit('submit', { content: value.value, files: [...files.value] })
+  emit('submit', {
+    content: value.value,
+    files: [...files.value],
+    knowledgeBaseIds: [...selectedKnowledgeBaseIds.value],
+  })
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -54,6 +76,7 @@ function handleKeydown(event: KeyboardEvent) {
 function clear() {
   value.value = ''
   files.value = []
+  selectedKnowledgeBaseIds.value = []
   void nextTick(resize)
 }
 
@@ -72,12 +95,22 @@ defineExpose({
         <button type="button" :disabled="generating || submitting" :aria-label="`移除附件 ${file.name}`" @click="removeFile(index)"><AppIcon name="close" size="14" /></button>
       </div>
     </div>
+    <div v-if="selectedKnowledgeBases.length" class="composer__knowledge-chips" aria-label="已选知识库">
+      <span v-for="base in selectedKnowledgeBases" :key="base.id" class="knowledge-chip"><AppIcon name="book" size="14" />{{ base.name }}<button type="button" :disabled="generating || submitting" :aria-label="`移除知识库 ${base.name}`" @click="removeKnowledgeBase(base.id)"><AppIcon name="close" size="12" /></button></span>
+    </div>
     <div class="composer">
       <textarea ref="inputRef" v-model="value" rows="1" placeholder="输入你的问题…" aria-label="输入消息" :disabled="generating || submitting" @input="resize" @keydown="handleKeydown"></textarea>
       <input ref="fileInputRef" class="composer__file-input" type="file" accept="image/jpeg,image/png,image/gif,application/pdf" multiple :disabled="generating || submitting" @change="addFiles">
       <div class="composer__bottom">
         <div class="composer__tools">
           <button type="button" class="composer-tool" :disabled="generating || submitting" aria-label="添加附件" @click="chooseFiles"><AppIcon name="paperclip" size="16" /><span>添加</span></button>
+          <KnowledgeBasePicker
+            v-model="selectedKnowledgeBaseIds"
+            :bases="knowledgeBases"
+            :disabled="generating || submitting"
+            @limit="emit('knowledgeLimit', $event)"
+            @open="emit('openKnowledgePicker')"
+          />
         </div>
         <div class="composer__actions">
           <span class="composer__hint">Shift + Enter 换行</span>

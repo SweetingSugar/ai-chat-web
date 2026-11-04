@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { apiRequest, apiStream, clearAuthState, setAuthState } from '../.tmp-tests/src/api/client.js'
 import { chatApi, readChatStream } from '../.tmp-tests/src/api/chat.js'
+import { knowledgeApi } from '../.tmp-tests/src/api/knowledge.js'
 
 test('uses the token header name returned by the login response', async () => {
   const values = new Map()
@@ -153,4 +154,31 @@ test('uploads a chat attachment as multipart form data with the dynamic token he
   assert.equal(uploaded.id, 1001)
   assert.equal(uploaded.originalName, 'report.pdf')
   clearAuthState()
+})
+
+test('calls knowledge-base APIs with JSON, query pagination, and multipart upload', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push([String(url), options])
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: { records: [], total: 0, current: 1, size: 20, pages: 0 },
+    }), { status: 200 })
+  }
+
+  await knowledgeApi.list(2, 20)
+  await knowledgeApi.create({ name: '产品手册', description: '内部资料', embeddingModelId: 7 })
+  await knowledgeApi.listEmbeddingModels()
+  await knowledgeApi.uploadDocument(9, new File(['content'], 'manual.txt', { type: 'text/plain' }), '手册')
+
+  assert.equal(calls[0][0], '/api/knowledge-bases?page=2&size=20')
+  assert.deepEqual(JSON.parse(calls[1][1].body), { name: '产品手册', description: '内部资料', embeddingModelId: 7 })
+  assert.equal(calls[2][0], '/api/chat/models/embedding')
+  assert.equal(calls[3][0], '/api/knowledge-bases/9/documents/file')
+  assert.equal(calls[3][1].headers.get('Content-Type'), null)
+  assert.ok(calls[3][1].body instanceof FormData)
+  assert.equal(calls[3][1].body.get('file').name, 'manual.txt')
+  assert.equal(calls[3][1].body.get('title'), '手册')
 })

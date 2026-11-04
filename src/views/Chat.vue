@@ -10,7 +10,8 @@ import Sidebar from '../components/chat/Sidebar.vue'
 import { useAuth } from '../composables/useAuth'
 import { createChatWorkspace } from '../composables/useChatWorkspace'
 import { chatApi } from '../api/chat'
-import type { ModelSummary } from '../types/chat'
+import { knowledgeApi } from '../api/knowledge'
+import type { KnowledgeBase, ModelSummary } from '../types/chat'
 
 const router = useRouter()
 const auth = useAuth()
@@ -35,6 +36,7 @@ const sidebarOpen = ref(false)
 const settingsOpen = ref(false)
 const toast = ref('')
 const models = ref<ModelSummary[]>([])
+const knowledgeBases = ref<KnowledgeBase[]>([])
 const isLoadingModels = ref(false)
 const modelsError = ref<string | null>(null)
 const theme = ref<'light' | 'dark'>('light')
@@ -94,6 +96,15 @@ async function changeModel(modelId: number) {
   }
 }
 
+async function loadKnowledgeBases() {
+  try {
+    knowledgeBases.value = (await knowledgeApi.list(1, 100)).records
+  } catch (error) {
+    knowledgeBases.value = []
+    notify(error instanceof Error ? error.message : '知识库列表加载失败')
+  }
+}
+
 function selectSession(id: number) {
   void workspace.selectSession(id).catch((error) => notify(error instanceof Error ? error.message : '加载会话失败'))
 }
@@ -121,13 +132,14 @@ function chooseSuggestion(value: string) {
   composerRef.value?.fill(value)
 }
 
-async function submitMessage(payload: { content: string; files: File[] }) {
+async function submitMessage(payload: { content: string; files: File[]; knowledgeBaseIds: number[] }) {
   try {
     const sent = await workspace.submit(
       payload.content,
       currentModelId.value,
       payload.files,
       activeModel.value.supportVision,
+      payload.knowledgeBaseIds,
     )
     if (sent) composerRef.value?.clear()
   } catch (error) {
@@ -163,7 +175,7 @@ watch(() => auth.isAuthenticated.value, (value) => {
 
 onMounted(async () => {
   theme.value = (localStorage.getItem('lumina-theme') as 'light' | null) ?? 'light'
-  await Promise.all([loadModels(), workspace.loadSessions()])
+  await Promise.all([loadModels(), workspace.loadSessions(), loadKnowledgeBases()])
   await nextTick()
 })
 </script>
@@ -212,8 +224,11 @@ onMounted(async () => {
         ref="composerRef"
         :generating="isGenerating"
         :submitting="isUploading"
+        :knowledge-bases="knowledgeBases"
         @submit="submitMessage"
         @invalid-files="notifyInvalidFiles"
+        @knowledge-limit="notify"
+        @open-knowledge-picker="loadKnowledgeBases"
         @stop="workspace.stopGeneration"
       />
     </main>

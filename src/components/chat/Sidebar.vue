@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import WorkspaceSidebar from '../layout/WorkspaceSidebar.vue'
 import AppIcon from '../common/AppIcon.vue'
 import type { ChatSession, User } from '../../types/chat'
 
@@ -20,9 +21,6 @@ const props = withDefaults(defineProps<{
   error: null,
 })
 
-const displayName = computed(() => props.user?.nickname || props.user?.username || '用户')
-const displayInitial = computed(() => (displayName.value.trim()[0] ?? 'U').toUpperCase())
-
 const emit = defineEmits<{
   newChat: []
   select: [id: number]
@@ -35,7 +33,6 @@ const emit = defineEmits<{
 }>()
 
 const query = ref('')
-const listRef = ref<HTMLElement | null>(null)
 const editingId = ref<number | null>(null)
 const editingTitle = ref('')
 const openMenuId = ref<number | null>(null)
@@ -78,22 +75,14 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ 'sidebar--mobile-open': mobileOpen }">
-    <div class="sidebar__topline">
-      <div class="brand-lockup">
-        <div class="brand-mark">✦</div>
-        <span>ice</span>
-      </div>
-      <button class="icon-button sidebar__close" aria-label="关闭会话导航" @click="emit('closeMobile')">
-        <AppIcon name="close" />
+  <WorkspaceSidebar :user="user" :mobile-open="mobileOpen" @close-mobile="emit('closeMobile')">
+    <template #actions>
+      <button class="new-chat-button" type="button" :disabled="loading" @click="emit('newChat')">
+        <span class="new-chat-button__icon"><AppIcon name="plus" size="16" /></span>
+        <span>新建对话</span>
+        <span class="new-chat-button__shortcut">⌘ K</span>
       </button>
-    </div>
-
-    <button class="new-chat-button" :disabled="loading" @click="emit('newChat')">
-      <span class="new-chat-button__icon"><AppIcon name="plus" size="16" /></span>
-      <span>新建对话</span>
-      <span class="new-chat-button__shortcut">⌘ K</span>
-    </button>
+    </template>
 
     <label class="search-box">
       <AppIcon name="search" size="16" />
@@ -103,7 +92,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 
     <div class="sidebar__section-label"><span>你的对话</span><span class="sidebar__count">{{ sessions.length }}</span></div>
 
-    <div ref="listRef" class="conversation-list" role="list" @scroll="handleListScroll">
+    <div class="conversation-list" role="list" @scroll="handleListScroll">
       <div v-if="loading" class="conversation-status">正在加载会话…</div>
       <div v-else-if="error" class="conversation-status conversation-status--error">
         <span>{{ error }}</span>
@@ -141,18 +130,5 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
         <div v-if="loadingMore" class="conversation-list__footer">正在加载更多…</div>
       </template>
     </div>
-
-    <div class="sidebar__footer">
-      <div class="usage-card">
-        <div class="usage-card__row"><span>本月使用情况</span><span>32%</span></div>
-        <div class="usage-card__track"><span style="width: 32%"></span></div>
-        <p>继续探索，让想法变得更清晰。</p>
-      </div>
-      <div class="profile-mini">
-        <div class="avatar avatar--small">{{ displayInitial }}</div>
-        <div><strong>{{ displayName }}</strong><span>个人工作区</span></div>
-        <AppIcon name="more" size="16" />
-      </div>
-    </div>
-  </aside>
+  </WorkspaceSidebar>
 </template>

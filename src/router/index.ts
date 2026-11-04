@@ -17,6 +17,18 @@ const router = createRouter({
       component: () => import('../views/Chat.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/knowledge-bases',
+      name: 'knowledge-bases',
+      component: () => import('../views/KnowledgeBases.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/knowledge-bases/:id',
+      name: 'knowledge-base-detail',
+      component: () => import('../views/KnowledgeBases.vue'),
+      meta: { requiresAuth: true },
+    },
     { path: '/:pathMatch(.*)*', redirect: '/chat' },
   ],
 })
@@ -24,7 +36,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const isAuthenticated = !!getAuthState()
   if (to.meta.requiresAuth && !isAuthenticated) {
-    return { name: 'login', query: to.fullPath === '/chat' ? {} : { redirect: to.fullPath } }
+    return { name: 'login', query: to.name === 'chat' ? {} : { redirect: to.fullPath } }
   }
   if (to.name === 'login' && isAuthenticated) {
     return { name: 'chat' }

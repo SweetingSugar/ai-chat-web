@@ -67,6 +67,7 @@ export interface ChatMessage {
   errorCode: string | null
   errorMessage: string | null
   usage?: ChatUsage
+  sources?: KnowledgeSource[]
   createTime: string
   updateTime: string
 }
@@ -110,11 +111,13 @@ export interface ChatStreamEvent {
   usage: ChatUsage | null
   errorCode: string | null
   message: string | null
+  sources: KnowledgeSource[] | null
 }
 
 export interface ChatRequest {
   content: string
   fileIds?: number[]
+  knowledgeBaseIds?: number[]
   modelId?: number
   requestId?: string
   temperature?: number
@@ -124,4 +127,57 @@ export interface ChatRequest {
 
 export interface ChatRegenerateRequest extends Omit<ChatRequest, 'content'> {
   messageId: number
+}
+
+export interface EmbeddingModel {
+  id: number
+  providerId: number
+  providerName: string
+  modelCode: string
+  modelName: string
+  embeddingDimension: number
+}
+
+export type KnowledgeBaseStatus = string
+export type KnowledgeDocumentSourceType = string
+export type KnowledgeDocumentStatus = string
+
+export interface KnowledgeBase {
+  id: number
+  name: string
+  description: string | null
+  embeddingModelId: number
+  embeddingModelVersion: number | null
+  pendingEmbeddingModelId: number | null
+  pendingEmbeddingModelVersion: number | null
+  activeIndexVersion: number | null
+  reindexing: boolean
+  status: KnowledgeBaseStatus
+  createTime: string
+  updateTime: string
+}
+
+export interface KnowledgeDocument {
+  id: number
+  title: string
+  sourceType: KnowledgeDocumentSourceType
+  fileId: number | null
+  status: KnowledgeDocumentStatus
+  indexVersion: number | null
+  activeIndexVersion: number | null
+  chunkCount: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  createTime: string
+  updateTime: string
+}
+
+export interface KnowledgeSource {
+  knowledgeBaseId: number
+  documentId: number
+  chunkId: number
+  title: string
+  content: string
+  score: number
+  rank: number
 }
