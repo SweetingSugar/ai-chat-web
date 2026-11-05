@@ -1,10 +1,11 @@
 import { computed, ref } from 'vue'
 import { knowledgeApi } from '../api/knowledge.js'
-import type { KnowledgeBase, KnowledgeDocument } from '../types/chat.js'
+import type { KnowledgeBase, KnowledgeDocument, KnowledgeDocumentPreview } from '../types/chat.js'
 
 export type KnowledgeBaseWorkspaceApi = Pick<typeof knowledgeApi,
   'list' | 'get' | 'create' | 'update' | 'delete' | 'changeEmbeddingModel' |
-  'listDocuments' | 'addTextDocument' | 'uploadDocument' | 'deleteDocument' | 'retryDocument'>
+  'listDocuments' | 'getDocumentContent' | 'getFilePresignedUrl' |
+  'addTextDocument' | 'uploadDocument' | 'deleteDocument' | 'retryDocument'>
 
 export interface KnowledgeBaseWorkspaceOptions {
   api?: KnowledgeBaseWorkspaceApi
@@ -30,6 +31,11 @@ export function createKnowledgeBaseWorkspace(options: KnowledgeBaseWorkspaceOpti
   const isLoadingDocuments = ref(false)
   const isLoadingMoreDocuments = ref(false)
   const isMutating = ref(false)
+  const preview = ref<KnowledgeDocumentPreview | null>(null)
+  const previewError = ref<string | null>(null)
+  const isLoadingPreview = ref(false)
+  const previewingDocumentId = ref<number | null>(null)
+  let previewRequestVersion = 0
   const basePage = ref(0)
   const basePages = ref(0)
   const documentPage = ref(0)
@@ -215,6 +221,59 @@ export function createKnowledgeBaseWorkspace(options: KnowledgeBaseWorkspaceOpti
     })
   }
 
+  async function loadDocumentPreview(document: KnowledgeDocument) {
+    const base = requireSelectedBase()
+    const requestVersion = ++previewRequestVersion
+    preview.value = null
+    previewError.value = null
+    isLoadingPreview.value = true
+    previewingDocumentId.value = document.id
+
+    try {
+      if (document.sourceType === 'TEXT') {
+        const content = await api.getDocumentContent(base.id, document.id)
+        if (requestVersion === previewRequestVersion) {
+          preview.value = { kind: 'TEXT', documentId: document.id, title: content.title, content: content.content }
+        }
+        return preview.value
+      }
+
+      if (document.sourceType === 'FILE') {
+        if (document.fileId === null) throw new Error('文件信息不完整，无法预览')
+        const download = await api.getFilePresignedUrl(document.fileId)
+        if (requestVersion === previewRequestVersion) {
+          preview.value = {
+            kind: 'FILE',
+            documentId: document.id,
+            title: document.title,
+            fileId: document.fileId,
+            url: download.url,
+          }
+        }
+        return preview.value
+      }
+
+      throw new Error('暂不支持预览此文档类型')
+    } catch (error) {
+      const message = errorMessage(error, '加载文档预览失败，请重试')
+      if (requestVersion === previewRequestVersion) previewError.value = message
+      throw error
+    } finally {
+      if (requestVersion === previewRequestVersion) {
+        isLoadingPreview.value = false
+        previewingDocumentId.value = null
+      }
+    }
+  }
+
+  function resetDocumentPreview() {
+    previewRequestVersion += 1
+    preview.value = null
+    previewError.value = null
+    isLoadingPreview.value = false
+    previewingDocumentId.value = null
+  }
+
   return {
     bases,
     selectedBase,
@@ -228,6 +287,10 @@ export function createKnowledgeBaseWorkspace(options: KnowledgeBaseWorkspaceOpti
     isLoadingDocuments,
     isLoadingMoreDocuments,
     isMutating,
+    preview,
+    previewError,
+    isLoadingPreview,
+    previewingDocumentId,
     hasMoreBases,
     hasMoreDocuments,
     loadBases,
@@ -242,5 +305,7 @@ export function createKnowledgeBaseWorkspace(options: KnowledgeBaseWorkspaceOpti
     uploadDocument,
     deleteDocument,
     retryDocument,
+    loadDocumentPreview,
+    resetDocumentPreview,
   }
 }

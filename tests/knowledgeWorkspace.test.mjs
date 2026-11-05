@@ -17,11 +17,11 @@ const base = (id, name) => ({
   updateTime: '2026-11-04T10:00:00',
 })
 
-const document = (id, status = 'COMPLETED') => ({
+const document = (id, status = 'COMPLETED', sourceType = 'FILE', fileId = 6) => ({
   id,
   title: '员工手册',
-  sourceType: 'FILE',
-  fileId: 6,
+  sourceType,
+  fileId,
   status,
   indexVersion: 1,
   activeIndexVersion: 1,
@@ -72,6 +72,14 @@ function createFakeApi({ pages = [], detail = null, documents = [], created = nu
     },
     deleteDocument: async (baseId, documentId) => { calls.push(['deleteDocument', baseId, documentId]) },
     retryDocument: async (baseId, documentId) => { calls.push(['retryDocument', baseId, documentId]) },
+    getDocumentContent: async (baseId, documentId) => {
+      calls.push(['getDocumentContent', baseId, documentId])
+      return { documentId, title: '请假制度', content: '第一条\n第二条' }
+    },
+    getFilePresignedUrl: async (fileId) => {
+      calls.push(['getFilePresignedUrl', fileId])
+      return { fileId, url: `https://files.example/${fileId}`, expiresIn: 600 }
+    },
   }
 }
 
@@ -111,4 +119,51 @@ test('retains a readable list error and clears loading state', async () => {
 
   assert.equal(workspace.basesError.value, '加载失败')
   assert.equal(workspace.isLoadingBases.value, false)
+})
+
+test('loads text and file previews through their respective API methods', async () => {
+  const api = createFakeApi({ detail: base(1, '手册') })
+  const workspace = createKnowledgeBaseWorkspace({ api })
+  await workspace.openBase(1)
+
+  await workspace.loadDocumentPreview(document(8, 'COMPLETED', 'TEXT', null))
+  assert.deepEqual(workspace.preview.value, {
+    kind: 'TEXT', documentId: 8, title: '请假制度', content: '第一条\n第二条',
+  })
+
+  await workspace.loadDocumentPreview(document(9))
+  assert.deepEqual(workspace.preview.value, {
+    kind: 'FILE', documentId: 9, title: '员工手册', fileId: 6, url: 'https://files.example/6',
+  })
+  assert.deepEqual(api.calls.filter(([name]) => name.startsWith('get')), [
+    ['get', 1], ['getDocumentContent', 1, 8], ['getFilePresignedUrl', 6],
+  ])
+})
+
+test('keeps preview errors local and rejects a file document without a file ID', async () => {
+  const workspace = createKnowledgeBaseWorkspace({ api: createFakeApi({ detail: base(1, '手册') }) })
+  await workspace.openBase(1)
+
+  await assert.rejects(() => workspace.loadDocumentPreview(document(8, 'COMPLETED', 'FILE', null)), /文件信息不完整/)
+
+  assert.equal(workspace.preview.value, null)
+  assert.equal(workspace.previewError.value, '文件信息不完整，无法预览')
+  assert.equal(workspace.isLoadingPreview.value, false)
+})
+
+test('ignores a preview response that arrives after preview state resets', async () => {
+  let resolveContent
+  const api = createFakeApi({ detail: base(1, '手册') })
+  api.getDocumentContent = () => new Promise((resolve) => { resolveContent = resolve })
+  const workspace = createKnowledgeBaseWorkspace({ api })
+  await workspace.openBase(1)
+
+  const pending = workspace.loadDocumentPreview(document(8, 'COMPLETED', 'TEXT', null))
+  workspace.resetDocumentPreview()
+  resolveContent({ documentId: 8, title: '请假制度', content: '不应显示' })
+  await pending
+
+  assert.equal(workspace.preview.value, null)
+  assert.equal(workspace.previewError.value, null)
+  assert.equal(workspace.isLoadingPreview.value, false)
 })
