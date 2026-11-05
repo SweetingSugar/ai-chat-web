@@ -1,5 +1,12 @@
 import { apiRequest } from './client.js'
-import type { EmbeddingModel, KnowledgeBase, KnowledgeDocument, PageResult } from '../types/chat.js'
+import type {
+  EmbeddingModel,
+  FileDownloadUrl,
+  KnowledgeBase,
+  KnowledgeDocument,
+  KnowledgeDocumentContent,
+  PageResult,
+} from '../types/chat.js'
 
 export const knowledgeApi = {
   list(page = 1, size = 20) {
@@ -31,6 +38,12 @@ export const knowledgeApi = {
   },
   listDocuments(id: number, page = 1, size = 20) {
     return apiRequest<PageResult<KnowledgeDocument>>(`/api/knowledge-bases/${id}/documents?page=${page}&size=${size}`)
+  },
+  getDocumentContent(baseId: number, documentId: number) {
+    return apiRequest<KnowledgeDocumentContent>(`/api/knowledge-bases/${baseId}/documents/${documentId}/content`)
+  },
+  getFilePresignedUrl(fileId: number) {
+    return apiRequest<FileDownloadUrl>(`/api/files/${fileId}/presigned-url`)
   },
   addTextDocument(id: number, payload: { title: string; content: string }) {
     return apiRequest<KnowledgeDocument>(`/api/knowledge-bases/${id}/documents/text`, {

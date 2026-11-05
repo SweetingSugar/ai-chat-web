@@ -172,6 +172,22 @@ export interface KnowledgeDocument {
   updateTime: string
 }
 
+export interface KnowledgeDocumentContent {
+  documentId: number
+  title: string
+  content: string
+}
+
+export interface FileDownloadUrl {
+  fileId: number
+  url: string
+  expiresIn: number
+}
+
+export type KnowledgeDocumentPreview =
+  | { kind: 'TEXT'; documentId: number; title: string; content: string }
+  | { kind: 'FILE'; documentId: number; title: string; fileId: number; url: string }
+
 export interface KnowledgeSource {
   knowledgeBaseId: number
   documentId: number

@@ -182,3 +182,34 @@ test('calls knowledge-base APIs with JSON, query pagination, and multipart uploa
   assert.equal(calls[3][1].body.get('file').name, 'manual.txt')
   assert.equal(calls[3][1].body.get('title'), '手册')
 })
+
+test('requests text content and a file presigned URL for document previews', async () => {
+  const values = new Map()
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push([String(url), options])
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: calls.length === 1
+        ? { documentId: 12, title: '请假制度', content: '第一条\n第二条' }
+        : { fileId: 19, url: 'https://files.example/report.pdf?signature=x', expiresIn: 600 },
+    }), { status: 200 })
+  }
+
+  const text = await knowledgeApi.getDocumentContent(7, 12)
+  const file = await knowledgeApi.getFilePresignedUrl(19)
+
+  assert.equal(calls[0][0], '/api/knowledge-bases/7/documents/12/content')
+  assert.equal(calls[0][1].method, undefined)
+  assert.equal(calls[1][0], '/api/files/19/presigned-url')
+  assert.equal(file.url, 'https://files.example/report.pdf?signature=x')
+  assert.equal(file.expiresIn, 600)
+  assert.equal(text.content, '第一条\n第二条')
+})
