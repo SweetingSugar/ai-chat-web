@@ -26,6 +26,7 @@ withDefaults(defineProps<{
     <path v-else-if="name === 'send'" d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" />
     <path v-else-if="name === 'stop'" d="M7 7h10v10H7z" />
     <path v-else-if="name === 'edit'" d="m4 20 4.2-1 9.7-9.7a2.1 2.1 0 0 0-3-3L5.2 16 4 20Zm9.9-12.8 3 3" />
+    <path v-else-if="name === 'eye'" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
     <path v-else-if="name === 'trash'" d="M5 7h14M10 11v5M14 11v5M9 7V4h6v3m-9 0 1 13h10l1-13" />
     <path v-else-if="name === 'close'" d="m6 6 12 12M18 6 6 18" />
     <path v-else-if="name === 'sun'" d="M12 4V2m0 20v-2M4 12H2m20 0h-2M5.6 5.6 4.2 4.2m15.6 15.6-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />

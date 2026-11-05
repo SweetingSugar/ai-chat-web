@@ -10,12 +10,14 @@ const props = withDefaults(defineProps<{
   error?: string | null
   hasMore?: boolean
   mutating?: boolean
+  previewingDocumentId?: number | null
 }>(), {
   loading: false,
   loadingMore: false,
   error: null,
   hasMore: false,
   mutating: false,
+  previewingDocumentId: null,
 })
 
 const emit = defineEmits<{
@@ -26,6 +28,7 @@ const emit = defineEmits<{
   upload: [file: File]
   deleteDocument: [id: number]
   retryDocument: [id: number]
+  preview: [document: KnowledgeDocument]
   loadMore: []
   retry: []
 }>()
@@ -103,6 +106,7 @@ function documentStatus(document: KnowledgeDocument) {
           </div>
           <span class="status-badge" :class="{ 'status-badge--danger': document.status === 'FAILED', 'status-badge--busy': document.status === 'PENDING' || document.status === 'INDEXING' }">{{ documentStatus(document) }}</span>
           <div class="document-row__actions">
+            <button class="icon-button" type="button" :disabled="mutating || previewingDocumentId === document.id" aria-label="查看文档" @click="emit('preview', document)"><AppIcon name="eye" size="16" /></button>
             <button v-if="document.status === 'FAILED'" class="icon-button" type="button" :disabled="mutating" aria-label="重试处理文档" @click="emit('retryDocument', document.id)"><AppIcon name="refresh" size="16" /></button>
             <button class="icon-button knowledge-danger" type="button" :disabled="mutating" aria-label="删除文档" @click="confirmDeleteDocument(document)"><AppIcon name="trash" size="16" /></button>
           </div>
