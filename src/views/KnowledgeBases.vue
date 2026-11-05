@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WorkspaceSidebar from '../components/layout/WorkspaceSidebar.vue'
 import KnowledgeBaseDetail from '../components/knowledge/KnowledgeBaseDetail.vue'
+import DocumentPreviewDialog from '../components/knowledge/DocumentPreviewDialog.vue'
 import KnowledgeBaseFormDialog from '../components/knowledge/KnowledgeBaseFormDialog.vue'
 import KnowledgeBaseList from '../components/knowledge/KnowledgeBaseList.vue'
 import TextDocumentDialog from '../components/knowledge/TextDocumentDialog.vue'
@@ -10,7 +11,7 @@ import SettingsDrawer from '../components/chat/SettingsDrawer.vue'
 import { knowledgeApi } from '../api/knowledge.js'
 import { useAuth } from '../composables/useAuth.js'
 import { createKnowledgeBaseWorkspace } from '../composables/useKnowledgeBaseWorkspace.js'
-import type { EmbeddingModel, KnowledgeBase } from '../types/chat.js'
+import type { EmbeddingModel, KnowledgeBase, KnowledgeDocument } from '../types/chat.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -22,6 +23,8 @@ const sidebarOpen = ref(false)
 const settingsOpen = ref(false)
 const formOpen = ref(false)
 const textFormOpen = ref(false)
+const previewOpen = ref(false)
+const previewDocument = ref<KnowledgeDocument | null>(null)
 const editingBase = ref<KnowledgeBase | null>(null)
 const models = ref<EmbeddingModel[]>([])
 const theme = ref<'light' | 'dark'>('light')
@@ -155,6 +158,30 @@ async function retryDocument(id: number) {
   }
 }
 
+async function loadPreview(document: KnowledgeDocument) {
+  try {
+    await workspace.loadDocumentPreview(document)
+  } catch {
+    // The dialog renders workspace.previewError and lets the user retry.
+  }
+}
+
+function openPreview(document: KnowledgeDocument) {
+  previewDocument.value = document
+  previewOpen.value = true
+  void loadPreview(document)
+}
+
+function closePreview() {
+  previewOpen.value = false
+  previewDocument.value = null
+  workspace.resetDocumentPreview()
+}
+
+function retryPreview() {
+  if (previewDocument.value) void loadPreview(previewDocument.value)
+}
+
 watch(theme, (value) => {
   document.documentElement.dataset.theme = value
 })
@@ -192,6 +219,7 @@ onMounted(async () => {
         :error="workspace.documentsError.value"
         :has-more="workspace.hasMoreDocuments.value"
         :mutating="workspace.isMutating.value"
+        :previewing-document-id="workspace.previewingDocumentId.value"
         @back="router.push({ name: 'knowledge-bases' })"
         @edit="openEdit"
         @delete-base="deleteBase"
@@ -199,6 +227,7 @@ onMounted(async () => {
         @upload="uploadDocument"
         @delete-document="deleteDocument"
         @retry-document="retryDocument"
+        @preview="openPreview"
         @load-more="workspace.selectedBase.value && workspace.loadDocuments(workspace.selectedBase.value.id, false).catch((error) => notify(error instanceof Error ? error.message : '加载更多文档失败'))"
         @retry="workspace.selectedBase.value && workspace.loadDocuments(workspace.selectedBase.value.id).catch((error) => notify(error instanceof Error ? error.message : '加载文档失败'))"
       />
@@ -219,6 +248,7 @@ onMounted(async () => {
     <SettingsDrawer :open="settingsOpen" :theme="theme" :user="user" @close="settingsOpen = false" @theme="handleTheme" @logout="handleLogout" />
     <KnowledgeBaseFormDialog :open="formOpen" :base="editingBase" :models="models" :submitting="workspace.isMutating.value" @close="formOpen = false" @submit="submitBase" />
     <TextDocumentDialog :open="textFormOpen" :submitting="workspace.isMutating.value" @close="textFormOpen = false" @submit="addTextDocument" />
+    <DocumentPreviewDialog :open="previewOpen" :document="previewDocument" :preview="workspace.preview.value" :loading="workspace.isLoadingPreview.value" :error="workspace.previewError.value" @close="closePreview" @retry="retryPreview" />
     <Transition name="toast"><div v-if="toast" class="toast"><span class="toast__dot"></span>{{ toast }}</div></Transition>
   </div>
 </template>
