@@ -11,7 +11,7 @@ import { useAuth } from '../composables/useAuth'
 import { createChatWorkspace } from '../composables/useChatWorkspace'
 import { chatApi } from '../api/chat'
 import { knowledgeApi } from '../api/knowledge'
-import type { KnowledgeBase, ModelSummary } from '../types/chat'
+import type { AvailableTool, KnowledgeBase, ModelSummary } from '../types/chat'
 
 const router = useRouter()
 const auth = useAuth()
@@ -37,8 +37,12 @@ const settingsOpen = ref(false)
 const toast = ref('')
 const models = ref<ModelSummary[]>([])
 const knowledgeBases = ref<KnowledgeBase[]>([])
+const availableTools = ref<AvailableTool[]>([])
 const isLoadingModels = ref(false)
+const isLoadingTools = ref(false)
 const modelsError = ref<string | null>(null)
+const toolsError = ref<string | null>(null)
+const hasLoadedTools = ref(false)
 const theme = ref<'light' | 'dark'>('light')
 const composerRef = ref<InstanceType<typeof Composer> | null>(null)
 let toastTimer: number | undefined
@@ -105,6 +109,22 @@ async function loadKnowledgeBases() {
   }
 }
 
+async function loadAvailableTools() {
+  if (isLoadingTools.value || hasLoadedTools.value) return
+  isLoadingTools.value = true
+  toolsError.value = null
+  try {
+    availableTools.value = await chatApi.listAvailableTools()
+    hasLoadedTools.value = true
+  } catch (error) {
+    availableTools.value = []
+    toolsError.value = error instanceof Error ? error.message : '工具列表加载失败'
+    notify(toolsError.value)
+  } finally {
+    isLoadingTools.value = false
+  }
+}
+
 function selectSession(id: number) {
   void workspace.selectSession(id).catch((error) => notify(error instanceof Error ? error.message : '加载会话失败'))
 }
@@ -132,7 +152,7 @@ function chooseSuggestion(value: string) {
   composerRef.value?.fill(value)
 }
 
-async function submitMessage(payload: { content: string; files: File[]; knowledgeBaseIds: number[] }) {
+async function submitMessage(payload: { content: string; files: File[]; knowledgeBaseIds: number[]; toolCodes: string[] }) {
   try {
     const sent = await workspace.submit(
       payload.content,
@@ -140,6 +160,7 @@ async function submitMessage(payload: { content: string; files: File[]; knowledg
       payload.files,
       activeModel.value.supportVision,
       payload.knowledgeBaseIds,
+      payload.toolCodes,
     )
     if (sent) composerRef.value?.clear()
   } catch (error) {
@@ -225,10 +246,15 @@ onMounted(async () => {
         :generating="isGenerating"
         :submitting="isUploading"
         :knowledge-bases="knowledgeBases"
+        :available-tools="availableTools"
+        :loading-tools="isLoadingTools"
+        :tools-error="toolsError"
         @submit="submitMessage"
         @invalid-files="notifyInvalidFiles"
         @knowledge-limit="notify"
+        @tool-limit="notify"
         @open-knowledge-picker="loadKnowledgeBases"
+        @open-tool-picker="loadAvailableTools"
         @stop="workspace.stopGeneration"
       />
     </main>
