@@ -16,6 +16,7 @@ function createMessage(id, sessionId, role, content) {
         modelId: role === 'ASSISTANT' ? 3 : null,
         errorCode: null,
         errorMessage: null,
+        sources: [],
         createTime: timestamp,
         updateTime: timestamp,
     };
@@ -260,6 +261,7 @@ export function createChatWorkspace(options = {}) {
         else if (event.type === 'COMPLETE') {
             assistant.status = 'COMPLETED';
             assistant.usage = event.usage ?? undefined;
+            assistant.sources = event.sources ?? [];
         }
         else if (event.type === 'FAILED') {
             assistant.status = 'FAILED';
@@ -268,7 +270,7 @@ export function createChatWorkspace(options = {}) {
         }
         assistant.updateTime = now();
     }
-    async function generateAssistant(sessionId, assistant, content, regenerate = false, fileIds) {
+    async function generateAssistant(sessionId, assistant, content, regenerate = false, fileIds, knowledgeBaseIds, toolCodes) {
         const session = sessions.value.find((item) => item.id === sessionId);
         const requestId = crypto.randomUUID();
         const controller = new AbortController();
@@ -288,6 +290,10 @@ export function createChatWorkspace(options = {}) {
             };
             if (!regenerate && fileIds?.length)
                 request.fileIds = fileIds;
+            if (!regenerate && knowledgeBaseIds?.length)
+                request.knowledgeBaseIds = knowledgeBaseIds;
+            if (!regenerate && toolCodes?.length)
+                request.toolCodes = toolCodes;
             const response = regenerate
                 ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
                 : await api.stream(sessionId, request, controller.signal);
@@ -317,7 +323,7 @@ export function createChatWorkspace(options = {}) {
             assistant.updateTime = now();
         }
     }
-    async function submit(content, defaultModelId, files = [], supportVision = true) {
+    async function submit(content, defaultModelId, files = [], supportVision = true, knowledgeBaseIds = [], toolCodes = []) {
         const value = attachmentPrompt(content, files);
         if (!value || isGenerating.value || isUploading.value)
             return false;
@@ -363,7 +369,7 @@ export function createChatWorkspace(options = {}) {
         }
         session.lastMessageTime = now();
         session.updateTime = now();
-        await generateAssistant(sessionId, assistantMessage, value, false, fileIds);
+        await generateAssistant(sessionId, assistantMessage, value, false, fileIds, knowledgeBaseIds, toolCodes);
         return true;
     }
     async function retry(messageId) {

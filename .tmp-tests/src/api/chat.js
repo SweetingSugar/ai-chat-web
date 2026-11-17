@@ -38,6 +38,9 @@ export const chatApi = {
     listModels() {
         return apiRequest('/api/chat/models');
     },
+    listAvailableTools() {
+        return apiRequest('/api/tools/available');
+    },
     uploadFile(file) {
         const body = new FormData();
         body.append('file', file);
