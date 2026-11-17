@@ -89,6 +89,16 @@ export interface ModelSummary {
   defaultModel: boolean
 }
 
+export type ChatToolType = 'HTTP' | 'MCP'
+
+export interface AvailableTool {
+  toolCode: string
+  toolName: string
+  description: string | null
+  toolType: ChatToolType
+  inputSchema: unknown | null
+}
+
 export interface UploadedFile {
   id: number
   userId: number
@@ -118,6 +128,7 @@ export interface ChatRequest {
   content: string
   fileIds?: number[]
   knowledgeBaseIds?: number[]
+  toolCodes?: string[]
   modelId?: number
   requestId?: string
   temperature?: number

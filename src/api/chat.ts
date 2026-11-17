@@ -2,6 +2,7 @@ import { apiRequest, apiStream } from './client.js'
 import { SseParser } from '../lib/sseParser.js'
 import type {
   ApiResponse,
+  AvailableTool,
   ChatMessage,
   ChatRegenerateRequest,
   ChatRequest,
@@ -50,6 +51,9 @@ export const chatApi = {
   readStream: readChatStream,
   listModels() {
     return apiRequest<ModelSummary[]>('/api/chat/models')
+  },
+  listAvailableTools() {
+    return apiRequest<AvailableTool[]>('/api/tools/available')
   },
   uploadFile(file: File) {
     const body = new FormData()

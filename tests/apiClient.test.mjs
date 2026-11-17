@@ -117,6 +117,38 @@ test('loads user-visible chat models from the chat models endpoint', async () =>
   assert.equal(models[0].modelCode, 'gpt-test')
 })
 
+test('loads chat-selectable tools from the available-tools endpoint', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push([String(url), options])
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: [{
+        toolCode: 'weather_current',
+        toolName: '实时天气',
+        description: '查询指定城市当前天气',
+        toolType: 'MCP',
+        inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+      }],
+    }), { status: 200 })
+  }
+
+  const tools = await chatApi.listAvailableTools()
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], '/api/tools/available')
+  assert.equal(calls[0][1].method, undefined)
+  assert.deepEqual(tools, [{
+    toolCode: 'weather_current',
+    toolName: '实时天气',
+    description: '查询指定城市当前天气',
+    toolType: 'MCP',
+    inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+  }])
+})
+
 test('uploads a chat attachment as multipart form data with the dynamic token header', async () => {
   const values = new Map()
   globalThis.localStorage = {
