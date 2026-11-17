@@ -2,33 +2,44 @@
 import { computed, nextTick, ref } from 'vue'
 import AppIcon from '../common/AppIcon.vue'
 import KnowledgeBasePicker from './KnowledgeBasePicker.vue'
+import ToolPicker from './ToolPicker.vue'
 import { formatFileSize, selectChatAttachments } from '../../lib/chatAttachments.js'
-import type { KnowledgeBase } from '../../types/chat.js'
+import type { AvailableTool, KnowledgeBase } from '../../types/chat.js'
 
 const props = withDefaults(defineProps<{
   generating: boolean
   submitting?: boolean
   knowledgeBases?: KnowledgeBase[]
+  availableTools?: AvailableTool[]
+  loadingTools?: boolean
+  toolsError?: string | null
 }>(), {
   submitting: false,
   knowledgeBases: () => [],
+  availableTools: () => [],
+  loadingTools: false,
+  toolsError: null,
 })
 
 const emit = defineEmits<{
-  submit: [payload: { content: string; files: File[]; knowledgeBaseIds: number[] }]
+  submit: [payload: { content: string; files: File[]; knowledgeBaseIds: number[]; toolCodes: string[] }]
   stop: []
   invalidFiles: [messages: string[]]
   knowledgeLimit: [message: string]
+  toolLimit: [message: string]
   openKnowledgePicker: []
+  openToolPicker: []
 }>()
 
 const value = ref('')
 const files = ref<File[]>([])
 const selectedKnowledgeBaseIds = ref<number[]>([])
+const selectedToolCodes = ref<string[]>([])
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(() => Boolean(value.value.trim() || files.value.length))
 const selectedKnowledgeBases = computed(() => props.knowledgeBases.filter((base) => selectedKnowledgeBaseIds.value.includes(base.id)))
+const selectedTools = computed(() => props.availableTools.filter((tool) => selectedToolCodes.value.includes(tool.toolCode)))
 
 function resize() {
   const input = inputRef.value
@@ -57,12 +68,17 @@ function removeKnowledgeBase(id: number) {
   selectedKnowledgeBaseIds.value = selectedKnowledgeBaseIds.value.filter((item) => item !== id)
 }
 
+function removeTool(toolCode: string) {
+  selectedToolCodes.value = selectedToolCodes.value.filter((item) => item !== toolCode)
+}
+
 function submit() {
   if (!canSubmit.value || props.submitting) return
   emit('submit', {
     content: value.value,
     files: [...files.value],
     knowledgeBaseIds: [...selectedKnowledgeBaseIds.value],
+    toolCodes: [...selectedToolCodes.value],
   })
 }
 
@@ -77,6 +93,7 @@ function clear() {
   value.value = ''
   files.value = []
   selectedKnowledgeBaseIds.value = []
+  selectedToolCodes.value = []
   void nextTick(resize)
 }
 
@@ -98,6 +115,9 @@ defineExpose({
     <div v-if="selectedKnowledgeBases.length" class="composer__knowledge-chips" aria-label="已选知识库">
       <span v-for="base in selectedKnowledgeBases" :key="base.id" class="knowledge-chip"><AppIcon name="book" size="14" />{{ base.name }}<button type="button" :disabled="generating || submitting" :aria-label="`移除知识库 ${base.name}`" @click="removeKnowledgeBase(base.id)"><AppIcon name="close" size="12" /></button></span>
     </div>
+    <div v-if="selectedTools.length" class="composer__tool-chips" aria-label="已选工具">
+      <span v-for="tool in selectedTools" :key="tool.toolCode" class="tool-chip"><AppIcon name="tool" size="14" />{{ tool.toolName }}<button type="button" :disabled="generating || submitting" :aria-label="`移除工具 ${tool.toolName}`" @click="removeTool(tool.toolCode)"><AppIcon name="close" size="12" /></button></span>
+    </div>
     <div class="composer">
       <textarea ref="inputRef" v-model="value" rows="1" placeholder="输入你的问题…" aria-label="输入消息" :disabled="generating || submitting" @input="resize" @keydown="handleKeydown"></textarea>
       <input ref="fileInputRef" class="composer__file-input" type="file" accept="image/jpeg,image/png,image/gif,application/pdf" multiple :disabled="generating || submitting" @change="addFiles">
@@ -110,6 +130,15 @@ defineExpose({
             :disabled="generating || submitting"
             @limit="emit('knowledgeLimit', $event)"
             @open="emit('openKnowledgePicker')"
+          />
+          <ToolPicker
+            v-model="selectedToolCodes"
+            :tools="availableTools"
+            :disabled="generating || submitting"
+            :loading="loadingTools"
+            :error="toolsError"
+            @limit="emit('toolLimit', $event)"
+            @open="emit('openToolPicker')"
           />
         </div>
         <div class="composer__actions">

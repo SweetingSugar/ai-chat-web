@@ -23,6 +23,7 @@ withDefaults(defineProps<{
     <path v-else-if="name === 'file'" d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h4" />
     <path v-else-if="name === 'book'" d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v17H7.5A2.5 2.5 0 0 0 5 21.5Zm0-17v17M8.5 6H16M8.5 10H16" />
     <path v-else-if="name === 'image'" d="M4 5h16v14H4zM7 16l3.5-4 2.5 3 2-2 2 3M8 9h.01" />
+    <path v-else-if="name === 'tool'" d="m14.7 6.3 3-3a4.2 4.2 0 0 0-5.4 5.4l-7.7 7.7a2.2 2.2 0 0 0 3.1 3.1l7.7-7.7a4.2 4.2 0 0 0 5.4-5.4l-3 3-3.2-3.2Z" />
     <path v-else-if="name === 'send'" d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13" />
     <path v-else-if="name === 'stop'" d="M7 7h10v10H7z" />
     <path v-else-if="name === 'edit'" d="m4 20 4.2-1 9.7-9.7a2.1 2.1 0 0 0-3-3L5.2 16 4 20Zm9.9-12.8 3 3" />
