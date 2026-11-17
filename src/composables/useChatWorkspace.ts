@@ -278,6 +278,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     regenerate = false,
     fileIds?: number[],
     knowledgeBaseIds?: number[],
+    toolCodes?: string[],
   ) {
     const session = sessions.value.find((item) => item.id === sessionId)
     const requestId = crypto.randomUUID()
@@ -298,6 +299,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
       }
       if (!regenerate && fileIds?.length) request.fileIds = fileIds
       if (!regenerate && knowledgeBaseIds?.length) request.knowledgeBaseIds = knowledgeBaseIds
+      if (!regenerate && toolCodes?.length) request.toolCodes = toolCodes
       const response = regenerate
         ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
         : await api.stream(sessionId, request, controller.signal)
@@ -329,6 +331,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     files: AttachmentCandidate[] = [],
     supportVision = true,
     knowledgeBaseIds: number[] = [],
+    toolCodes: string[] = [],
   ) {
     const value = attachmentPrompt(content, files)
     if (!value || isGenerating.value || isUploading.value) return false
@@ -370,7 +373,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     }
     session.lastMessageTime = now()
     session.updateTime = now()
-    await generateAssistant(sessionId, assistantMessage, value, false, fileIds, knowledgeBaseIds)
+    await generateAssistant(sessionId, assistantMessage, value, false, fileIds, knowledgeBaseIds, toolCodes)
     return true
   }
 

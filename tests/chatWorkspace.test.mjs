@@ -433,3 +433,37 @@ test('sends selected knowledge-base IDs and retains stream sources', async () =>
   assert.deepEqual(request.knowledgeBaseIds, [4])
   assert.deepEqual(workspace.messages.value[1].sources, [source])
 })
+
+test('sends selected tool codes only with a new chat stream request', async () => {
+  const api = createFakeApi({
+    streamEvents: [{ type: 'COMPLETE', requestId: 'req-1', taskId: 50, assistantMessageId: 11, usage: null }],
+    details: { 1: { session: session(1, '工具问题'), messages: [] } },
+  })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '新会话')] })
+
+  await workspace.submit('上海天气如何？', 3, [], true, [], ['weather_current', 'calendar_events'])
+
+  const request = api.calls.find(([name]) => name === 'stream')[2]
+  assert.deepEqual(request.toolCodes, ['weather_current', 'calendar_events'])
+})
+
+test('does not add selected-tool codes to regenerate requests', async () => {
+  const assistant = { id: 20, sessionId: 1, role: 'ASSISTANT', content: '旧回答', status: 'COMPLETED', generationTaskId: 7 }
+  const api = createFakeApi({
+    details: { 1: { session: session(1, '会话 1'), messages: [
+      { id: 19, sessionId: 1, role: 'USER', content: '问题', status: 'COMPLETED' },
+      assistant,
+    ] } },
+    regenerateEvents: [{ type: 'COMPLETE', requestId: 'retry-1', taskId: 8, assistantMessageId: 20, usage: null }],
+  })
+  const workspace = createChatWorkspace({
+    api,
+    initialSessions: [session(1, '会话 1')],
+    initialMessages: { 1: [{ id: 19, sessionId: 1, role: 'USER', content: '问题', status: 'COMPLETED' }, assistant] },
+  })
+
+  await workspace.regenerate(20)
+
+  const request = api.calls.find(([name]) => name === 'regenerate')[2]
+  assert.equal('toolCodes' in request, false)
+})
