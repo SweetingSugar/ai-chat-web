@@ -29,7 +29,13 @@ const router = createRouter({
       component: () => import('../views/KnowledgeBases.vue'),
       meta: { requiresAuth: true },
     },
-    { path: '/:pathMatch(.*)*', redirect: '/chat' },
+    {
+      path: '/agents',
+      name: 'agents',
+      component: () => import('../views/Agents.vue'),
+      meta: { requiresAuth: true },
+    },
+    { path: '/:pathMatch(.*)*', redirect: '/chat' }
   ],
 })
 

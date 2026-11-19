@@ -40,6 +40,10 @@ const displayInitial = computed(() => (displayName.value.trim()[0] ?? 'U').toUpp
         <AppIcon name="book" size="16" />
         <span>知识库</span>
       </RouterLink>
+      <RouterLink class="workspace-nav__item" active-class="workspace-nav__item--active" :to="{ name: 'agents' }" @click="emit('closeMobile')">
+        <AppIcon name="star" size="16" />
+        <span>Agent</span>
+      </RouterLink>
     </nav>
 
     <slot />
