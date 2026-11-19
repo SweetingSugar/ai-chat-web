@@ -130,6 +130,7 @@ export interface ChatRequest {
   knowledgeBaseIds?: number[]
   toolCodes?: string[]
   modelId?: number
+  agentId?: number
   requestId?: string
   temperature?: number
   topP?: number

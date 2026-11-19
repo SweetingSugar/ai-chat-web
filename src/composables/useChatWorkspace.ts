@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { chatApi } from '../api/chat.js'
 import type { ChatMessage, ChatRequest, ChatSession, ChatStreamEvent, UploadedFile } from '../types/chat.js'
+import type { AgentSummary } from '../types/agent.js'
 import { attachmentPrompt, type AttachmentCandidate } from '../lib/chatAttachments.js'
 
 export type ChatWorkspaceApi = Pick<
@@ -50,6 +51,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
   const pageSize = options.pageSize ?? 20
   const sessions = ref<ChatSession[]>([...(options.initialSessions ?? [])])
   const messagesBySession = reactive<Record<number, ChatMessage[]>>({})
+  const selectedAgentsBySession = reactive<Record<number, AgentSummary | null>>({})
   for (const [sessionId, messages] of Object.entries(options.initialMessages ?? {})) {
     messagesBySession[Number(sessionId)] = messages.map((message) => ({ ...message }))
   }
@@ -77,6 +79,16 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
   function ensureMessages(sessionId: number) {
     messagesBySession[sessionId] ??= []
     return messagesBySession[sessionId]
+  }
+
+  function selectedAgent(sessionId = activeSessionId.value) {
+    return sessionId === null ? null : selectedAgentsBySession[sessionId] ?? null
+  }
+
+  function selectAgent(sessionId: number, agent: AgentSummary | null) {
+    if (generatingSessionId.value === sessionId) return
+    if (agent === null) delete selectedAgentsBySession[sessionId]
+    else selectedAgentsBySession[sessionId] = { ...agent }
   }
 
   async function loadSessionDetail(sessionId: number) {
@@ -225,6 +237,7 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
       if (index < 0) return
       sessions.value.splice(index, 1)
       delete messagesBySession[sessionId]
+      delete selectedAgentsBySession[sessionId]
       if (activeSessionId.value === sessionId) {
         const nextSession = sessions.value[0]
         if (nextSession) {
@@ -292,14 +305,15 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     assistant.errorMessage = null
     assistant.usage = undefined
     try {
+      const agent = selectedAgent(sessionId)
       const request: ChatRequest = {
         content,
-        modelId: session?.defaultModelId || undefined,
         requestId,
+        ...(agent ? { agentId: agent.id } : { modelId: session?.defaultModelId || undefined }),
       }
       if (!regenerate && fileIds?.length) request.fileIds = fileIds
-      if (!regenerate && knowledgeBaseIds?.length) request.knowledgeBaseIds = knowledgeBaseIds
-      if (!regenerate && toolCodes?.length) request.toolCodes = toolCodes
+      if (!agent && !regenerate && knowledgeBaseIds?.length) request.knowledgeBaseIds = knowledgeBaseIds
+      if (!agent && !regenerate && toolCodes?.length) request.toolCodes = toolCodes
       const response = regenerate
         ? await api.regenerate(sessionId, { ...request, messageId: assistant.id }, controller.signal)
         : await api.stream(sessionId, request, controller.signal)
@@ -428,6 +442,8 @@ export function createChatWorkspace(options: ChatWorkspaceOptions = {}) {
     changeModel,
     togglePinned,
     deleteSession,
+    selectedAgent,
+    selectAgent,
     submit,
     retry,
     regenerate,

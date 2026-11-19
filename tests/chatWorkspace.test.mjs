@@ -467,3 +467,81 @@ test('does not add selected-tool codes to regenerate requests', async () => {
   const request = api.calls.find(([name]) => name === 'regenerate')[2]
   assert.equal('toolCodes' in request, false)
 })
+
+const agent = {
+  id: 7,
+  name: '售后助手',
+  description: '处理订单售后问题',
+  modelId: 8,
+  knowledgeBaseIds: [4],
+  toolCodes: ['order_query'],
+  status: 1,
+}
+
+test('sends the selected Agent ID without manual model, knowledge, or tool overrides', async () => {
+  const api = createFakeApi({ streamEvents: [{ type: 'COMPLETE', requestId: 'r', taskId: 1, assistantMessageId: 2, usage: null }] })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+  workspace.selectAgent(1, agent)
+
+  await workspace.submit('查询订单', 3, [], true, [4], ['weather_current'])
+
+  const request = api.calls.find(([name]) => name === 'stream')[2]
+  assert.equal(request.agentId, 7)
+  assert.equal('modelId' in request, false)
+  assert.equal('knowledgeBaseIds' in request, false)
+  assert.equal('toolCodes' in request, false)
+})
+
+test('sends the current session Agent ID when regenerating', async () => {
+  const assistant = { id: 20, sessionId: 1, role: 'ASSISTANT', content: '旧回答', status: 'COMPLETED', generationTaskId: 7 }
+  const api = createFakeApi({
+    details: { 1: { session: session(1, '会话 1'), messages: [
+      { id: 19, sessionId: 1, role: 'USER', content: '订单状态', status: 'COMPLETED' },
+      assistant,
+    ] } },
+    regenerateEvents: [{ type: 'COMPLETE', requestId: 'retry-1', taskId: 8, assistantMessageId: 20, usage: null }],
+  })
+  const workspace = createChatWorkspace({
+    api,
+    initialSessions: [session(1, '会话 1')],
+    initialMessages: { 1: [
+      { id: 19, sessionId: 1, role: 'USER', content: '订单状态', status: 'COMPLETED' },
+      assistant,
+    ] },
+  })
+  workspace.selectAgent(1, agent)
+
+  await workspace.regenerate(20)
+
+  const request = api.calls.find(([name]) => name === 'regenerate')[2]
+  assert.equal(request.messageId, 20)
+  assert.equal(request.agentId, 7)
+  assert.equal('modelId' in request, false)
+  assert.equal('knowledgeBaseIds' in request, false)
+  assert.equal('toolCodes' in request, false)
+})
+
+test('keeps Agent selection separate per session and clears it when the session is deleted', async () => {
+  const workspace = createChatWorkspace({ api: createFakeApi(), initialSessions: [session(1, '一'), session(2, '二')] })
+  workspace.selectAgent(1, agent)
+  workspace.selectAgent(2, { ...agent, id: 8, name: '旅行助手' })
+
+  assert.equal(workspace.selectedAgent(1)?.id, 7)
+  assert.equal(workspace.selectedAgent(2)?.id, 8)
+  await workspace.deleteSession(1)
+  assert.equal(workspace.selectedAgent(1), null)
+  assert.equal(workspace.selectedAgent(2)?.id, 8)
+})
+
+test('uses the ordinary request fields when no Agent is selected', async () => {
+  const api = createFakeApi({ streamEvents: [{ type: 'COMPLETE', requestId: 'r', taskId: 1, assistantMessageId: 2, usage: null }] })
+  const workspace = createChatWorkspace({ api, initialSessions: [session(1, '会话 1')] })
+
+  await workspace.submit('普通对话', 3, [], true, [4], ['weather_current'])
+
+  const request = api.calls.find(([name]) => name === 'stream')[2]
+  assert.equal(request.modelId, 3)
+  assert.deepEqual(request.knowledgeBaseIds, [4])
+  assert.deepEqual(request.toolCodes, ['weather_current'])
+  assert.equal('agentId' in request, false)
+})
