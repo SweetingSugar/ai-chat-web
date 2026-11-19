@@ -10,7 +10,9 @@ import Sidebar from '../components/chat/Sidebar.vue'
 import { useAuth } from '../composables/useAuth'
 import { createChatWorkspace } from '../composables/useChatWorkspace'
 import { chatApi } from '../api/chat'
+import { agentApi } from '../api/agent.js'
 import { knowledgeApi } from '../api/knowledge'
+import type { AgentSummary } from '../types/agent.js'
 import type { AvailableTool, KnowledgeBase, ModelSummary } from '../types/chat'
 
 const router = useRouter()
@@ -38,6 +40,9 @@ const toast = ref('')
 const models = ref<ModelSummary[]>([])
 const knowledgeBases = ref<KnowledgeBase[]>([])
 const availableTools = ref<AvailableTool[]>([])
+const agents = ref<AgentSummary[]>([])
+const isLoadingAgents = ref(false)
+const agentsError = ref<string | null>(null)
 const isLoadingModels = ref(false)
 const isLoadingTools = ref(false)
 const modelsError = ref<string | null>(null)
@@ -68,6 +73,8 @@ const activeModel = computed<ModelSummary>(() => models.value.find((model) => mo
 const selectableModels = computed(() => models.value.some((model) => model.id === activeModel.value.id)
   ? models.value
   : [activeModel.value, ...models.value])
+const selectedAgent = computed(() => workspace.selectedAgent(activeSessionId.value))
+const agentLocked = computed(() => selectedAgent.value !== null)
 
 function notify(message: string) {
   toast.value = message
@@ -91,12 +98,27 @@ async function loadModels() {
 }
 
 async function changeModel(modelId: number) {
-  if (!selectableModels.value.some((model) => model.id === modelId)) return
+  if (agentLocked.value || !selectableModels.value.some((model) => model.id === modelId)) return
   try {
     await workspace.changeModel(modelId)
     notify('模型已切换')
   } catch (error) {
     notify(error instanceof Error ? error.message : '模型切换失败，请重试')
+  }
+}
+
+async function loadAgents() {
+  isLoadingAgents.value = true
+  agentsError.value = null
+  try {
+    const result = await agentApi.list(1, 100)
+    agents.value = [...new Map(result.records.filter((agent) => agent.status === 1).map((agent) => [agent.id, agent])).values()]
+  } catch (error) {
+    agents.value = []
+    agentsError.value = error instanceof Error ? error.message : 'Agent 列表加载失败，请重试'
+    notify(agentsError.value)
+  } finally {
+    isLoadingAgents.value = false
   }
 }
 
@@ -196,7 +218,7 @@ watch(() => auth.isAuthenticated.value, (value) => {
 
 onMounted(async () => {
   theme.value = (localStorage.getItem('lumina-theme') as 'light' | null) ?? 'light'
-  await Promise.all([loadModels(), workspace.loadSessions(), loadKnowledgeBases()])
+  await Promise.all([loadModels(), workspace.loadSessions(), loadKnowledgeBases(), loadAgents()])
   await nextTick()
 })
 </script>
@@ -227,7 +249,8 @@ onMounted(async () => {
         :title="activeTitle"
         :model="activeModel"
         :models="selectableModels"
-        :model-disabled="isLoadingModels || isChangingModel || isGenerating"
+        :model-disabled="isLoadingModels || isChangingModel || isGenerating || agentLocked"
+        :agent="selectedAgent"
         @menu="sidebarOpen = true"
         @settings="settingsOpen = true"
         @model-change="changeModel"
@@ -249,6 +272,11 @@ onMounted(async () => {
         :available-tools="availableTools"
         :loading-tools="isLoadingTools"
         :tools-error="toolsError"
+        :agents="agents"
+        :selected-agent="selectedAgent"
+        :agent-locked="agentLocked"
+        @agent-change="(agent) => activeSessionId !== null && workspace.selectAgent(activeSessionId, agent)"
+        @manage-agents="router.push({ name: 'agents' })"
         @submit="submitMessage"
         @invalid-files="notifyInvalidFiles"
         @knowledge-limit="notify"

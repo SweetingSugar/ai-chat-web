@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppIcon from '../common/AppIcon.vue'
+import type { AgentSummary } from '../../types/agent.js'
 import type { ModelSummary } from '../../types/chat'
 
 defineProps<{
@@ -7,6 +8,7 @@ defineProps<{
   model: ModelSummary
   models: ModelSummary[]
   modelDisabled?: boolean
+  agent?: AgentSummary | null
 }>()
 
 const emit = defineEmits<{
@@ -26,11 +28,12 @@ const emit = defineEmits<{
     <div class="chat-header__actions">
       <label class="model-select">
         <span class="model-select__dot"></span>
-        <select :value="model.id" :disabled="modelDisabled" aria-label="选择模型" @change="emit('modelChange', Number(($event.target as HTMLSelectElement).value))">
+        <select :value="model.id" :disabled="modelDisabled || agent !== null" aria-label="选择模型" @change="!agent && emit('modelChange', Number(($event.target as HTMLSelectElement).value))">
           <option v-if="!models.some((item) => item.id === model.id)" :value="model.id">{{ model.modelName }}</option>
           <option v-for="item in models" :key="item.id" :value="item.id">{{ item.modelName }}</option>
         </select>
         <AppIcon name="chevron-down" size="15" />
+        <span v-if="agent" class="model-select__locked" :title="`由 Agent“${agent.name}”固定`">Agent 已锁定</span>
       </label>
       <button class="icon-button" aria-label="打开设置" @click="emit('settings')"><AppIcon name="settings" /></button>
     </div>
