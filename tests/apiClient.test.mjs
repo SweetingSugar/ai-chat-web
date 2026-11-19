@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { apiRequest, apiStream, clearAuthState, setAuthState } from '../.tmp-tests/src/api/client.js'
 import { chatApi, readChatStream } from '../.tmp-tests/src/api/chat.js'
 import { knowledgeApi } from '../.tmp-tests/src/api/knowledge.js'
+import { agentApi } from '../.tmp-tests/src/api/agent.js'
 
 test('uses the token header name returned by the login response', async () => {
   const values = new Map()
@@ -244,4 +245,54 @@ test('requests text content and a file presigned URL for document previews', asy
   assert.equal(file.url, 'https://files.example/report.pdf?signature=x')
   assert.equal(file.expiresIn, 600)
   assert.equal(text.content, '第一条\n第二条')
+})
+
+test('uses Agent endpoints with backend-aligned request bodies', async () => {
+  const values = new Map()
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push([String(url), options])
+    return new Response(JSON.stringify({
+      success: true,
+      code: 'SUCCESS',
+      message: 'OK',
+      data: {
+        id: 9,
+        name: '售后助手',
+        description: '处理售后问题',
+        systemPrompt: '保持准确。',
+        modelId: 3,
+        knowledgeBaseIds: [4],
+        toolCodes: ['order_query'],
+        status: 1,
+        createTime: '2026-11-19T10:00:00',
+        updateTime: '2026-11-19T10:00:00',
+      },
+    }), { status: 200 })
+  }
+  const payload = {
+    name: '售后助手', description: '处理售后问题', systemPrompt: '保持准确。',
+    modelId: 3, knowledgeBaseIds: [4], toolCodes: ['order_query'],
+  }
+
+  await agentApi.list(2, 10)
+  await agentApi.get(9)
+  await agentApi.create(payload)
+  await agentApi.update(9, payload)
+  await agentApi.updateStatus(9, 0)
+  await agentApi.delete(9)
+
+  assert.deepEqual(calls.map(([url, options]) => [url, options.method, options.body]), [
+    ['/api/agents?page=2&size=10', undefined, undefined],
+    ['/api/agents/9', undefined, undefined],
+    ['/api/agents', 'POST', JSON.stringify(payload)],
+    ['/api/agents/9', 'PUT', JSON.stringify(payload)],
+    ['/api/agents/9/status', 'PATCH', JSON.stringify({ status: 0 })],
+    ['/api/agents/9', 'DELETE', undefined],
+  ])
 })
